@@ -25,4 +25,9 @@ A simple project using raylib to simulate a 3D mesh.
 
 ## Download exe file
 
-[Download](./bin/Debug/Mesh3D.exe)
+[Download](./download/Mesh3D.exe)
+
+## Build from source
+
+1. Clone the repository
+2. Run `build.bat` to build the project
