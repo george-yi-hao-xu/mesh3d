@@ -5,7 +5,7 @@
 
 const float ANIMATION_SPEED_STEP = 0.05f;
 const int GRID_SIZE = 31;
-const float MASS = 0.1f;
+const float MASS = 1.0f;
 
 void DrawCoordSystem(void);
 

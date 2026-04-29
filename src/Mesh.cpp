@@ -72,22 +72,27 @@ namespace mesh3d {
     bool Mesh::Update(float dt) {
         if (dt <= 0.0f) return true;
 
+		// 1. Apply external forces (gravity + air resistance)
 		for (auto& particle : particles) {
 			particle.ApplyForce(Vector3{ 0, -9.8f, 0 });  // Gravity
-			// air resistance
+			// Air resistance: opposes velocity direction
 			particle.ApplyForce(Vector3{
-				airResistanceFactor * particle.velocity.x * particle.velocity.x,
-				airResistanceFactor * particle.velocity.y * particle.velocity.y,
-				airResistanceFactor * particle.velocity.z * particle.velocity.z
+				-airResistanceFactor * particle.velocity.x * std::abs(particle.velocity.x),
+				-airResistanceFactor * particle.velocity.y * std::abs(particle.velocity.y),
+				-airResistanceFactor * particle.velocity.z * std::abs(particle.velocity.z)
 				});
-			particle.Update(dt);
 		}
-        
 
+		// 2. Apply spring forces
         for (auto& spring : springs) {
 			spring.stiffness = springStiffness; // listen on the stiffness changes
             spring.ApplySpringForce(dampingFactor); // hook law
         }
+
+		// 3. Integrate all particles
+		for (auto& particle : particles) {
+			particle.Update(dt);
+		}
 
         // debug
         for (auto& particle : particles) {
