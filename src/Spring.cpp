@@ -13,26 +13,38 @@ Vector3 MultiplyVector3(float l, const Vector3& v) {
 	return { l * v.x, l * v.y, l * v.z };
 }
 
+float LengthVector3(const Vector3& v) {
+	return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
 Spring::Spring(Particle* a, Particle* b, float k): 
 	pA(a), 
 	pB(b), 
 	stiffness(k), 
-	initialDiff(*b - *a)
+	restLength(LengthVector3(*b - *a))
 {};
 
 void Spring::ApplySpringForce(float dampingFactor) {
-	// HOOK LAW. F = -k * (x - x0)
-	const Vector3 currParticalsDiff = *pB - *pA; // p1 is the origin
-	const Vector3 delta = SubstractVector3(currParticalsDiff, initialDiff);
-	const Vector3 springForce = MultiplyVector3(-stiffness, delta);
+	Vector3 diff = SubstractVector3(pB->position, pA->position);
+	float currentLength = LengthVector3(diff);
 
+	// Avoid division by zero
+	if (currentLength < 0.0001f) return;
+
+	// Unit direction: from pA to pB
+	Vector3 dir = { diff.x / currentLength, diff.y / currentLength, diff.z / currentLength };
+
+	// Hooke's Law: F = -k * (currentLength - restLength) * dir
+	float displacement = currentLength - restLength;
+	Vector3 springForce = MultiplyVector3(-stiffness * displacement, dir);
+
+	// Damping only along the spring direction (prevents oscillation without adding artificial drag)
 	Vector3 velocityDiff = SubstractVector3(pB->velocity, pA->velocity);
+	float velocityAlongSpring = velocityDiff.x * dir.x + velocityDiff.y * dir.y + velocityDiff.z * dir.z;
+	Vector3 dampingForce = MultiplyVector3(-dampingFactor * velocityAlongSpring, dir);
 
-	// Project velocity difference onto spring direction
+	Vector3 totalForce = AddVector3(springForce, dampingForce);
 
-	// **Total Force = Spring Force + Damping**
-	Vector3 totalForce =AddVector3( springForce, MultiplyVector3(-dampingFactor, velocityDiff)); // damping
-
-	pA->ApplyForce(MultiplyVector3(-1, totalForce)); // p1 is origin
-    pB->ApplyForce(totalForce); // push/pull side pB
+	pA->ApplyForce(MultiplyVector3(-1, totalForce));
+	pB->ApplyForce(totalForce);
 }

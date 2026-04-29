@@ -7,5 +7,9 @@
 		"**/.DS_Store": true,
 		"**/*.o": true,
 		"**/*.exe": true,
+	},
+	"cmake.sourceDirectory": "D:/yxu/mesh3d/build/external/raylib-master",
+	"code-runner.executorMap": {
+		"cpp": "cd $workspaceRoot && mingw32-make.exe config=debug_x64 && $workspaceRoot/bin/Debug/mesh3d.exe"
 	}
 }
