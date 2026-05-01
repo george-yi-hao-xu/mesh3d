@@ -42,6 +42,7 @@ int main() {
 	const int panelX = screenWidth - panelWidth;
 
 	bool isRunning = false;
+	bool hasStarted = false;
 
     InitWindow(screenWidth, screenHeight, "3D Cloth Simulation");
 
@@ -50,30 +51,36 @@ int main() {
 	mesh3d::Mesh cloth = mesh3d::Mesh(loadedConfig);
 
     while (!WindowShouldClose()) {
-        if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) { isRunning = !isRunning; };
+        if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
+			if (!isRunning) { hasStarted = true; isRunning = true; }
+			else { isRunning = false; }
+		};
 
-		// increase or decrease animation speed
-		if (IsKeyPressed(KEY_UP)) { animationSpeed += ANIMATION_SPEED_STEP; }
-		if (IsKeyPressed(KEY_DOWN)) {
-			if (animationSpeed > ANIMATION_SPEED_STEP) animationSpeed -= ANIMATION_SPEED_STEP;
-		}
+		// Parameter adjustments only allowed before first play
+		if (!hasStarted) {
+			// increase or decrease animation speed
+			if (IsKeyPressed(KEY_UP)) { animationSpeed += ANIMATION_SPEED_STEP; }
+			if (IsKeyPressed(KEY_DOWN)) {
+				if (animationSpeed > ANIMATION_SPEED_STEP) animationSpeed -= ANIMATION_SPEED_STEP;
+			}
 
-		// increase or decrease stiffness
-		if (IsKeyPressed(KEY_M)) { loadedConfig.stiffness += 1.0f; }
-		if (IsKeyPressed(KEY_N)) {
-			if (loadedConfig.stiffness > 1.0f) loadedConfig.stiffness -= 1.0f;
-		}
-		
-		// increase or decrease damping factor
-		if (IsKeyPressed(KEY_P)) { loadedConfig.dampingFactor += 0.1f; }
-		if (IsKeyPressed(KEY_O)) {
-			if (loadedConfig.dampingFactor >= 0.1f) loadedConfig.dampingFactor -= 0.1f;
-		}
+			// increase or decrease stiffness
+			if (IsKeyPressed(KEY_M)) { loadedConfig.stiffness += 1.0f; }
+			if (IsKeyPressed(KEY_N)) {
+				if (loadedConfig.stiffness > 1.0f) loadedConfig.stiffness -= 1.0f;
+			}
+			
+			// increase or decrease damping factor
+			if (IsKeyPressed(KEY_P)) { loadedConfig.dampingFactor += 0.1f; }
+			if (IsKeyPressed(KEY_O)) {
+				if (loadedConfig.dampingFactor >= 0.1f) loadedConfig.dampingFactor -= 0.1f;
+			}
 
-		// increase or decrease air resistance factor
-		if (IsKeyPressed(KEY_K)) { loadedConfig.airResistanceFactor += 0.001f; }
-		if (IsKeyPressed(KEY_J)) {
-			if (loadedConfig.airResistanceFactor >= 0.001f) loadedConfig.airResistanceFactor -= 0.001f;
+			// increase or decrease air resistance factor
+			if (IsKeyPressed(KEY_K)) { loadedConfig.airResistanceFactor += 0.001f; }
+			if (IsKeyPressed(KEY_J)) {
+				if (loadedConfig.airResistanceFactor >= 0.001f) loadedConfig.airResistanceFactor -= 0.001f;
+			}
 		}
 
 		// if window moves, then stop simulation
@@ -90,6 +97,7 @@ int main() {
 			cloth = mesh3d::Mesh(loadedConfig);
 			msg = "Reseted!";
 			isRunning = false;
+			hasStarted = false;
 		}
 
 		// Mouse over panel detection
@@ -137,7 +145,7 @@ int main() {
 			}
 		}
 
-		//#region Draw
+		#pragma region Draw
         BeginDrawing();
 
         ClearBackground(RAYWHITE);
@@ -157,13 +165,17 @@ int main() {
 		GuiGroupBox({ (float)(panelX + 10), 10, (float)(panelWidth - 20), (float)(screenHeight - 20) }, "Control Panel");
 
 		// Status label
-		GuiLabel({ cx, cy, cw, 20 }, isRunning ? "Status: Running" : "Status: Paused");
+		const char* statusText = isRunning ? "Status: Running" : (hasStarted ? "Status: Paused (Locked)" : "Status: Ready");
+		GuiLabel({ cx, cy, cw, 20 }, statusText);
 		cy += 28;
 
 		// Play / Pause Toggle
 		bool prevRunning = isRunning;
 		GuiToggle({ cx, cy, cw, ch }, isRunning ? "Pause" : "Play", &isRunning);
-		if (isRunning != prevRunning) msg = isRunning ? "Running!" : "Paused!";
+		if (isRunning != prevRunning) {
+			if (isRunning) { hasStarted = true; }
+			msg = isRunning ? "Running!" : "Paused!";
+		}
 		cy += gap;
 
 		// Restart Button
@@ -171,37 +183,45 @@ int main() {
 			cloth = mesh3d::Mesh(loadedConfig);
 			msg = "Reseted!";
 			isRunning = false;
+			hasStarted = false;
 		}
 		cy += gap;
 
 		// Save Config Button
-		if (GuiButton({ cx, cy, cw, ch }, "Save Config (S)")) {
+		if (GuiButton({ cx, cy, cw, ch }, "Save Config (S) to config.txt file")) {
 			mesh3d::WriteConfig("config.txt", loadedConfig);
 			msg = "Config saved!";
 		}
 		cy += gap + 15;
 
+		// Lock sliders after first play (drawn normally but not interactive)
+		if (hasStarted) GuiLock();
+
+		#pragma region Sliders (only interactive when paused)
+		// Make thumb bright red when running for better visibility
+		int prevThumbColor = GuiGetStyle(SLIDER, BASE_COLOR_PRESSED);
+		if (hasStarted) GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, ColorToInt(GRAY));
+
 		// Animation Speed Slider
-		GuiSliderBar({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.2f", animationSpeed), &animationSpeed, 0.05f, 3.0f);
+		GuiSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.2f", animationSpeed), &animationSpeed, 0.05f, 3.0f);
 		cy += gap;
 
-		// Stiffness Slider - disabled while running
-		{
-			int prevGuiState = GuiGetState();
-			if (isRunning) GuiSetState(STATE_DISABLED);
-			GuiSliderBar({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", loadedConfig.stiffness), &loadedConfig.stiffness, 1.0f, 50.0f);
-			GuiSetState(prevGuiState);
-		}
+		// Stiffness Slider
+		GuiSlider({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", loadedConfig.stiffness), &loadedConfig.stiffness, 1.0f, 50.0f);
 		cy += gap;
 
 		// Damping Slider
-		GuiSliderBar({ cx, cy, cw, ch }, "Damping", TextFormat("%.2f", loadedConfig.dampingFactor), &loadedConfig.dampingFactor, 0.0f, 5.0f);
+		GuiSlider({ cx, cy, cw, ch }, "Damping", TextFormat("%.2f", loadedConfig.dampingFactor), &loadedConfig.dampingFactor, 0.0f, 5.0f);
 		cy += gap;
 
 		// Air Resistance Slider
-		GuiSliderBar({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", loadedConfig.airResistanceFactor), &loadedConfig.airResistanceFactor, 0.0f, 0.1f);
+		GuiSlider({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", loadedConfig.airResistanceFactor), &loadedConfig.airResistanceFactor, 0.0f, 0.1f);
 		cy += gap;
 
+		GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, prevThumbColor);
+		GuiUnlock();
+		#pragma endregion
+		
 		// Mass display (read-only)
 		GuiLabel({ cx, cy, cw, 20 }, TextFormat("Partial Mass: %.2f", MASS));
 		cy += gap;
@@ -216,7 +236,7 @@ int main() {
 		// DrawText("Keyboard shortcuts still work!", 20, 20 * 5, 20, DARKGRAY);
 
 		EndDrawing();
-		//#endregion
+		#pragma endregion
     }
 
     CloseWindow();
