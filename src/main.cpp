@@ -1,4 +1,5 @@
-﻿#include "raylib.h"
+﻿#define RAYGUI_IMPLEMENTATION
+#include "raygui.h"
 #include "Mesh.h"
 #include <string>
 #include <iostream>
@@ -6,6 +7,21 @@
 const float ANIMATION_SPEED_STEP = 0.05f;
 const int GRID_SIZE = 31;
 const float MASS = 1.0f;
+
+// Camera control constants (matching raylib internals)
+const float CAMERA_MOUSE_MOVE_SENSITIVITY = 0.003f;
+const float CAMERA_MOVE_SPEED = 5.4f;
+const float CAMERA_ROTATION_SPEED = 0.03f;
+
+// Forward declarations for camera manipulation functions (from rcamera.h)
+extern "C" {
+void CameraYaw(Camera *camera, float angle, bool rotateAroundTarget);
+void CameraPitch(Camera *camera, float angle, bool lockView, bool rotateAroundTarget, bool rotateUp);
+void CameraRoll(Camera *camera, float angle);
+void CameraMoveForward(Camera *camera, float distance, bool moveInWorldPlane);
+void CameraMoveRight(Camera *camera, float distance, bool moveInWorldPlane);
+void CameraMoveToTarget(Camera *camera, float delta);
+}
 
 void DrawCoordSystem(void);
 
@@ -22,12 +38,12 @@ int main() {
 
 	const int screenWidth = 1024;
 	const int screenHeight = 768;
+	const int panelWidth = 240;
+	const int panelX = screenWidth - panelWidth;
 
 	bool isRunning = false;
-	bool isCameraFree = true;
 
     InitWindow(screenWidth, screenHeight, "3D Cloth Simulation");
-	SetMousePosition(screenWidth / 2, screenHeight / 2);
 
     Camera camera = { { 15.0f, 15.0f, 15.0f }, { 0.0f, -2.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 60.0f, CAMERA_PERSPECTIVE };
 
@@ -60,14 +76,6 @@ int main() {
 			if (loadedConfig.airResistanceFactor >= 0.001f) loadedConfig.airResistanceFactor -= 0.001f;
 		}
 
-		// let mouse control camera
-		if(isCameraFree) UpdateCamera(&camera, CAMERA_THIRD_PERSON);
-		if (IsKeyPressed(KEY_C)) {
-			isCameraFree = !isCameraFree;
-			if (isCameraFree) msg = "Camera free!";
-			else msg = "Camera locked!";
-		}
-
 		// if window moves, then stop simulation
 		if (IsWindowResized() || !IsWindowFocused) { isRunning = false; }
 
@@ -84,8 +92,44 @@ int main() {
 			isRunning = false;
 		}
 
+		// Mouse over panel detection
+		Rectangle panelRec = { (float)panelX, 0, (float)panelWidth, (float)screenHeight };
+		bool isMouseOverPanel = CheckCollisionPointRec(GetMousePosition(), panelRec);
+
+		// Update camera only when mouse is not over the GUI panel
+		if (!isMouseOverPanel) {
+			float dt = GetFrameTime();
+			float moveSpeed = CAMERA_MOVE_SPEED * dt;
+			float rotSpeed = CAMERA_ROTATION_SPEED * dt;
+			Vector2 mouseDelta = GetMouseDelta();
+
+			// Mouse wheel zoom (always active)
+			CameraMoveToTarget(&camera, -GetMouseWheelMove());
+
+			// Right-click drag to rotate
+			if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
+				CameraYaw(&camera, -mouseDelta.x * CAMERA_MOUSE_MOVE_SENSITIVITY, true);
+				CameraPitch(&camera, -mouseDelta.y * CAMERA_MOUSE_MOVE_SENSITIVITY, true, true, false);
+			}
+
+			// Keyboard movement (WASD)
+			if (IsKeyDown(KEY_W)) CameraMoveForward(&camera, moveSpeed, true);
+			if (IsKeyDown(KEY_S)) CameraMoveForward(&camera, -moveSpeed, true);
+			if (IsKeyDown(KEY_A)) CameraMoveRight(&camera, -moveSpeed, true);
+			if (IsKeyDown(KEY_D)) CameraMoveRight(&camera, moveSpeed, true);
+
+			// Keyboard rotation (arrow keys)
+			if (IsKeyDown(KEY_UP)) CameraPitch(&camera, rotSpeed, true, true, false);
+			if (IsKeyDown(KEY_DOWN)) CameraPitch(&camera, -rotSpeed, true, true, false);
+			if (IsKeyDown(KEY_LEFT)) CameraYaw(&camera, -rotSpeed, true);
+			if (IsKeyDown(KEY_RIGHT)) CameraYaw(&camera, rotSpeed, true);
+
+			// Keyboard roll (Q/E)
+			if (IsKeyDown(KEY_Q)) CameraRoll(&camera, -rotSpeed);
+			if (IsKeyDown(KEY_E)) CameraRoll(&camera, rotSpeed);
+		}
+
 		if (isRunning) {
-			//UpdateCamera(&camera, CAMERA_FREE);
 			float dt = GetFrameTime() * animationSpeed;
 			if (!cloth.Update(dt)) {
 				isRunning = false;
@@ -103,17 +147,74 @@ int main() {
         cloth.Draw();
         EndMode3D();
 
-        // Text
-		DrawText(isRunning ? "Running..." : "Paused (Press Enter/Space to continue)", 20, 20, 20, RED);
-		DrawText(msg.c_str(), 20, 20*2, 20, BLACK);
-		DrawText(("FPS: " + formateFloat(GetFPS())).c_str(), 20, 20*4, 20, BLACK);
-		DrawText(("Animation Speed: " + formateFloat(animationSpeed) + " | Up & Down").c_str(), 20, 20*5, 20, BLACK);
-		DrawText("Press C to lock/free camera", 20, 20 * 6, 20, BLACK);
+		// ---- GUI Control Panel ----
+		float cx = panelX + 20;
+		float cw = panelWidth - 40;
+		float cy = 20;
+		float ch = 28;
+		float gap = 38;
 
-		DrawText(("Stiffness: " + formateFloat(loadedConfig.stiffness) + " | N -> M").c_str(), 20, screenHeight - 20*2, 20, BLACK);
-		DrawText(("Damping Factor: " + formateFloat(loadedConfig.dampingFactor) + " | O -> P").c_str(), 20, screenHeight - 20*3, 20, BLACK);
-		DrawText(("Air Resistance Factor: " + formateFloat(loadedConfig.airResistanceFactor) + "| J -> K").c_str(), 20, screenHeight - 20 * 4, 20, BLACK);
-		DrawText(("Partial Mass: " + formateFloat(MASS)).c_str(), 20, screenHeight - 20 * 5, 20, BLACK);
+		GuiGroupBox({ (float)(panelX + 10), 10, (float)(panelWidth - 20), (float)(screenHeight - 20) }, "Control Panel");
+
+		// Status label
+		GuiLabel({ cx, cy, cw, 20 }, isRunning ? "Status: Running" : "Status: Paused");
+		cy += 28;
+
+		// Play / Pause Toggle
+		bool prevRunning = isRunning;
+		GuiToggle({ cx, cy, cw, ch }, isRunning ? "Pause" : "Play", &isRunning);
+		if (isRunning != prevRunning) msg = isRunning ? "Running!" : "Paused!";
+		cy += gap;
+
+		// Restart Button
+		if (GuiButton({ cx, cy, cw, ch }, "Restart (R)")) {
+			cloth = mesh3d::Mesh(loadedConfig);
+			msg = "Reseted!";
+			isRunning = false;
+		}
+		cy += gap;
+
+		// Save Config Button
+		if (GuiButton({ cx, cy, cw, ch }, "Save Config (S)")) {
+			mesh3d::WriteConfig("config.txt", loadedConfig);
+			msg = "Config saved!";
+		}
+		cy += gap + 15;
+
+		// Animation Speed Slider
+		GuiSliderBar({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.2f", animationSpeed), &animationSpeed, 0.05f, 3.0f);
+		cy += gap;
+
+		// Stiffness Slider - disabled while running
+		{
+			int prevGuiState = GuiGetState();
+			if (isRunning) GuiSetState(STATE_DISABLED);
+			GuiSliderBar({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", loadedConfig.stiffness), &loadedConfig.stiffness, 1.0f, 50.0f);
+			GuiSetState(prevGuiState);
+		}
+		cy += gap;
+
+		// Damping Slider
+		GuiSliderBar({ cx, cy, cw, ch }, "Damping", TextFormat("%.2f", loadedConfig.dampingFactor), &loadedConfig.dampingFactor, 0.0f, 5.0f);
+		cy += gap;
+
+		// Air Resistance Slider
+		GuiSliderBar({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", loadedConfig.airResistanceFactor), &loadedConfig.airResistanceFactor, 0.0f, 0.1f);
+		cy += gap;
+
+		// Mass display (read-only)
+		GuiLabel({ cx, cy, cw, 20 }, TextFormat("Partial Mass: %.2f", MASS));
+		cy += gap;
+
+		// FPS display
+		GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %.0f", GetFPS()));
+
+        // Text overlay in 3D area
+		// DrawText(isRunning ? "Running..." : "Paused (Press Enter/Space to continue)", 20, 20, 20, RED);
+		DrawText(msg.c_str(), 20, 20*2, 20, BLACK);
+		DrawText("Keep pressing right-mouse and drag to rotate camera", 20, 20 * 4, 20, BLACK);
+		// DrawText("Keyboard shortcuts still work!", 20, 20 * 5, 20, DARKGRAY);
+
 		EndDrawing();
 		//#endregion
     }
