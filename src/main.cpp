@@ -3,10 +3,12 @@
 #include "Mesh.h"
 #include <string>
 #include <iostream>
+#include <ctime>
+
 
 const float ANIMATION_SPEED_STEP = 0.05f;
 const int GRID_SIZE = 31;
-const float MASS = 1.0f;
+
 
 // Camera control constants (matching raylib internals)
 const float CAMERA_MOUSE_MOVE_SENSITIVITY = 0.003f;
@@ -24,6 +26,12 @@ void CameraMoveToTarget(Camera *camera, float delta);
 }
 
 void DrawCoordSystem(void);
+
+void SetDefaultSaveFilename(char* buffer, size_t size) {
+	time_t now = time(NULL);
+	struct tm* timeinfo = localtime(&now);
+	strftime(buffer, size, "config_%Y%m%d_%H%M%S.txt", timeinfo);
+}
 
 std::string formateFloat(float f) {
 	char buffer[20];
@@ -43,6 +51,8 @@ int main() {
 
 	bool isRunning = false;
 	bool hasStarted = false;
+	bool showSaveDialog = false;
+	char saveFilename[256] = "config.txt";
 
     InitWindow(screenWidth, screenHeight, "3D Cloth Simulation");
 
@@ -85,20 +95,6 @@ int main() {
 
 		// if window moves, then stop simulation
 		if (IsWindowResized() || !IsWindowFocused) { isRunning = false; }
-
-		// save config to the file
-		if (IsKeyPressed(KEY_S)) {
-			mesh3d::WriteConfig("config.txt", loadedConfig);
-			msg = "Config saved!";
-		}
-
-		// restart simulation
-		if (IsKeyPressed(KEY_R)) { 
-			cloth = mesh3d::Mesh(loadedConfig);
-			msg = "Reseted!";
-			isRunning = false;
-			hasStarted = false;
-		}
 
 		// Mouse over panel detection
 		Rectangle panelRec = { (float)panelX, 0, (float)panelWidth, (float)screenHeight };
@@ -179,18 +175,28 @@ int main() {
 		cy += gap;
 
 		// Restart Button
-		if (GuiButton({ cx, cy, cw, ch }, "Restart (R)")) {
-			cloth = mesh3d::Mesh(loadedConfig);
-			msg = "Reseted!";
-			isRunning = false;
-			hasStarted = false;
+		if (hasStarted){
+			auto pressResult = GuiButton({ cx, cy, cw, ch }, "Restart");
+			if (pressResult) {
+				cloth = mesh3d::Mesh(loadedConfig);
+				msg = "Reseted!";
+				isRunning = false;
+				hasStarted = false;
+			}
+		} else {
+			// disabled restart button (drawn but not interactive)
+			int prevState = GuiGetState();
+			GuiSetState(STATE_DISABLED);
+			GuiButton({ cx, cy, cw, ch }, "Restart");
+			GuiSetState(prevState);
 		}
+
 		cy += gap;
 
 		// Save Config Button
-		if (GuiButton({ cx, cy, cw, ch }, "Save Config (S) to config.txt file")) {
-			mesh3d::WriteConfig("config.txt", loadedConfig);
-			msg = "Config saved!";
+		if (GuiButton({ cx, cy, cw, ch }, "Save Config")) {
+			SetDefaultSaveFilename(saveFilename, sizeof(saveFilename));
+			showSaveDialog = true;
 		}
 		cy += gap + 15;
 
@@ -219,12 +225,13 @@ int main() {
 		cy += gap;
 
 		GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, prevThumbColor);
+		
+		// Particle Mass Slider
+		GuiSlider({ cx, cy, cw, ch }, "Mass", TextFormat("%.2f", loadedConfig.particleMass), &loadedConfig.particleMass, 0.1f, 10.0f);
+		cy += gap;
+
 		GuiUnlock();
 		#pragma endregion
-		
-		// Mass display (read-only)
-		GuiLabel({ cx, cy, cw, 20 }, TextFormat("Partial Mass: %.2f", MASS));
-		cy += gap;
 
 		// FPS display
 		GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %.0f", GetFPS()));
@@ -234,6 +241,20 @@ int main() {
 		DrawText(msg.c_str(), 20, 20*2, 20, BLACK);
 		DrawText("Keep pressing right-mouse and drag to rotate camera", 20, 20 * 4, 20, BLACK);
 		// DrawText("Keyboard shortcuts still work!", 20, 20 * 5, 20, DARKGRAY);
+
+		// Save Config Dialog
+		if (showSaveDialog) {
+			DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
+			Rectangle dialogRec = { (float)(screenWidth / 2 - 200), (float)(screenHeight / 2 - 100), 400, 200 };
+			int result = GuiTextInputBox(dialogRec, "Save Configuration", "Enter filename:", "OK;Cancel", saveFilename, 256, NULL);
+			if (result == 1) {
+				mesh3d::WriteConfig(saveFilename, loadedConfig);
+				msg = "Config saved!";
+				showSaveDialog = false;
+			} else if (result >= 0) {
+				showSaveDialog = false;
+			}
+		}
 
 		EndDrawing();
 		#pragma endregion
