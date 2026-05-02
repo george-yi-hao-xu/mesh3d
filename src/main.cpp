@@ -5,6 +5,10 @@
 #include <iostream>
 #include <ctime>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 
 const float ANIMATION_SPEED_STEP = 0.05f;
 const int GRID_SIZE = 31;
@@ -251,6 +255,21 @@ int main() {
 				mesh3d::WriteConfig(saveFilename, loadedConfig);
 				msg = "Config saved!";
 				showSaveDialog = false;
+#ifdef __EMSCRIPTEN__
+				EM_ASM({
+					var filename = UTF8ToString($0);
+					var data = FS.readFile(filename);
+					var blob = new Blob([data.buffer], {type: "text/plain"});
+					var url = URL.createObjectURL(blob);
+					var a = document.createElement("a");
+					a.href = url;
+					a.download = filename;
+					document.body.appendChild(a);
+					a.click();
+					document.body.removeChild(a);
+					URL.revokeObjectURL(url);
+				}, saveFilename);
+#endif
 			} else if (result >= 0) {
 				showSaveDialog = false;
 			}
