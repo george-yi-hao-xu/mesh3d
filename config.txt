@@ -2,6 +2,6 @@ width=31
 height=31
 spacing=0.25
 stiffness=10
-particleMass=1.0
+particleMass=1
 dampingFactor=1.5
 airResistanceFactor=0.01
