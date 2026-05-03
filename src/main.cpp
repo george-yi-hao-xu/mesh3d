@@ -10,6 +10,8 @@
 #include <emscripten.h>
 #endif
 
+#include "FileDialog.h"
+
 
 const float ANIMATION_SPEED_STEP = 0.05f;
 const int GRID_SIZE = 31;
@@ -45,6 +47,8 @@ std::string formateFloat(float f) {
 	return std::string(buffer);
 }
 
+
+
 int main() {
 	mesh3d::Config loadedConfig = mesh3d::LoadMeshConfig("config.txt");
 	float animationSpeed = 1.0f;
@@ -61,7 +65,6 @@ int main() {
 	char saveFilename[256] = "config.txt";
 
 	char cloudFilename[256] = "";
-	bool editCloudFile = false;
 	if (loadedConfig.pointCloudFile.length() < sizeof(cloudFilename)) {
 		std::strcpy(cloudFilename, loadedConfig.pointCloudFile.c_str());
 	}
@@ -272,23 +275,32 @@ int main() {
 		GuiLabel({ cx, cy, cw, 18 }, "Point Cloud");
 		cy += 20;
 
-		// Cloud file path text box
-		GuiLabel({ cx, cy, 40, ch }, "File:");
-		if (GuiTextBox({ cx + 40, cy, cw - 40, ch }, cloudFilename, 256, editCloudFile)) {
-			editCloudFile = !editCloudFile;
-			if (!editCloudFile) {
-				loadedConfig.pointCloudFile = cloudFilename;
-			}
-		}
+		// Display current cloud file name
+		const char* cloudDisplay = loadedConfig.pointCloudFile.empty() ? "(default grid)" : loadedConfig.pointCloudFile.c_str();
+		GuiLabel({ cx, cy, cw, ch }, TextFormat("Cloud: %s", cloudDisplay));
 		cy += gap;
 
-		// Apply Cloud button: update config and restart mesh
-		if (GuiButton({ cx, cy, cw, ch }, "Apply Cloud File")) {
+		// Select File button: opens a dialog (Win32) or triggers HTML upload (Web)
+		if (GuiButton({ cx, cy, cw, ch }, "Select File")) {
+#ifdef __EMSCRIPTEN__
+			EM_ASM({ document.getElementById('cloudFileInput').click(); });
+#elif defined(_WIN32)
+			if (OpenFileDialog(cloudFilename, sizeof(cloudFilename))) {
+				loadedConfig.pointCloudFile = cloudFilename;
+				std::strcpy(cloudFilename, loadedConfig.pointCloudFile.c_str());
+				cloth = mesh3d::Mesh(loadedConfig);
+				msg = "Cloud loaded!";
+				isRunning = false;
+				hasStarted = false;
+			}
+#else
+			// Linux/Mac fallback: load from the stored path
 			loadedConfig.pointCloudFile = cloudFilename;
 			cloth = mesh3d::Mesh(loadedConfig);
 			msg = "Cloud loaded!";
 			isRunning = false;
 			hasStarted = false;
+#endif
 		}
 		cy += gap;
 
