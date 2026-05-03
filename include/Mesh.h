@@ -11,27 +11,37 @@ namespace mesh3d{
         float spacing = 1.0f;
         float stiffness = 10.0f;
         float particleMass = 1.0f;
-		float dampingFactor = 0.1f;
-		float airResistanceFactor = 0.001f;
+        float dampingFactor = 0.1f;
+        float airResistanceFactor = 0.001f;
+        std::string pointCloudFile = "";
+        unsigned int springSeed = 42;
+        float maxSpringDist = 1.5f;
+        int maxSpringsPerParticle = 4;
+        float springConnectProb = 0.8f;
     };
 
-	Config LoadMeshConfig(const std::string& filename);
-	void WriteConfig(const std::string& filename, const Config& config);
+    Config LoadMeshConfig(const std::string& filename);
+    void WriteConfig(const std::string& filename, const Config& config);
     
     class Mesh {
     private:
         int width, height;
         std::vector<Particle> particles;
         std::vector<Spring> springs;
-		float springStiffness = 20.0f;
-		float dampingFactor = 10.0f;
-		float airResistanceFactor = 0.001f;
+        float springStiffness = 20.0f;
+        float dampingFactor = 10.0f;
+        float airResistanceFactor = 0.001f;
+
+        void BuildRegularGrid(const Config& c);
+        void BuildFromPointCloud(const Config& c);
+        static std::vector<Particle> LoadPointCloud(const std::string& path);
+        void GenerateRandomSprings(unsigned int seed, float maxDist, int maxPerParticle, float prob);
     public:
         Mesh(const Config& config);
         bool Update(float dt);
         void Draw();
         void SetStiffness(float stiff);
-		void SetDampingFactor(float dFactor);
-		void SetAirResistanceFactor(float arFactor);
+        void SetDampingFactor(float dFactor);
+        void SetAirResistanceFactor(float arFactor);
     };
 } // namespace mesh3d

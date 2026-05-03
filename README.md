@@ -90,6 +90,55 @@ A control panel on the right side provides buttons and sliders for all actions:
 
 > **Tip:** Mouse over the right panel automatically disables camera rotation so you can interact with the controls safely.
 
+## Point Cloud (Irregular Mesh)
+
+By default, the app generates a regular rectangular grid. You can also load a custom **point cloud file** to create an irregular mesh of any shape.
+
+### Point Cloud File Format
+
+Create a plain text file (e.g., `mycloud.msh`). Each line defines one particle:
+
+```
+# comments start with #
+x y z fixed mass
+```
+
+- `x y z`: particle position in 3D space.
+- `fixed`: `1` = pinned (does not move), `0` = free.
+- `mass`: particle mass (float, must be > 0).
+
+See [`example_cloud.msh`](./example_cloud.msh) for a working example.
+
+### How Springs Are Generated
+
+The app does **not** require explicit spring definitions. Instead, springs are generated automatically using a **seeded random algorithm**:
+
+1. For every pair of particles within `maxSpringDist`, a candidate spring is created.
+2. Candidates are shuffled using the `springSeed`.
+3. Each candidate pair has a `springConnectProb` chance of becoming a real spring.
+4. No particle gets more than `maxSpringsPerParticle` springs.
+
+This means **the same seed always produces the same mesh topology** — perfect for reproducible experiments.
+
+### GUI Controls (Point Cloud Section)
+
+- **File** — type the path to your point cloud file.
+- **Apply Cloud File** — load the file and rebuild the mesh.
+- **Seed** — random seed for spring generation (0 ~ 999).
+- **Max Dist** — maximum distance between particles to consider a spring (0.1 ~ 5.0).
+- **Max Conn** — maximum springs per particle (1 ~ 12).
+- **Conn Prob** — probability that a candidate pair becomes a spring (0.0 ~ 1.0).
+
+### Config File Keys
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `pointCloudFile` | `""` | Path to point cloud file. Empty = use regular grid. |
+| `springSeed` | `42` | Random seed for reproducible spring generation. |
+| `maxSpringDist` | `1.5` | Max distance for spring candidates. |
+| `maxSpringsPerParticle` | `4` | Max springs attached to one particle. |
+| `springConnectProb` | `0.8` | Probability of connecting a candidate pair. |
+
 ## Download exe file
 
 [Download](./download/Mesh3D.exe)
