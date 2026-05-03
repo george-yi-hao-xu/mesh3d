@@ -1,0 +1,11 @@
+/* custom style to hide header etc */
+
+#output{
+    display: none;
+}
+
+canvas.emscripten {
+    max-width: 100%;
+    width: unset;
+    max-height: 100%;
+}

@@ -28,7 +28,10 @@ if errorlevel 1 (
 if not exist "build\web" mkdir build\web
 if not exist "docs" mkdir docs
 
-powershell -Command "(Get-Content 'build/external/raylib-master/src/shell.html') -replace 'raylib web game', '3D Cloth Simulation' | Set-Content 'docs/shell.html'"
+REM Only copy the template if shell.html does not already exist
+if not exist "docs/shell.html" (
+    powershell -Command "(Get-Content 'build/external/raylib-master/src/shell.html') -replace 'raylib web game', '3D Cloth Simulation' | Set-Content 'docs/shell.html'"
+)
 
 set "RAYLIB_SRC=build/external/raylib-master/src"
 set "INCLUDES=-I%RAYLIB_SRC% -I%RAYLIB_SRC%/external/glfw/include -Iinclude -Isrc -Ibuild/external"
@@ -63,7 +66,7 @@ call emcc -c src/main.cpp     -o build/web/main.o     %CXXFLAGS%
 if errorlevel 1 goto error
 
 echo [3/3] Linking...
-call emcc build/web/rcore.o build/web/rshapes.o build/web/rtextures.o build/web/rtext.o build/web/utils.o build/web/rmodels.o build/web/raudio.o build/web/Mesh.o build/web/Particle.o build/web/Spring.o build/web/main.o -o docs/index.html -s USE_GLFW=3 -s ASYNCIFY=1 -s TOTAL_MEMORY=134217728 -s EXPORTED_RUNTIME_METHODS=[FS] --preload-file config.txt --shell-file docs/shell.html
+call emcc build/web/rcore.o build/web/rshapes.o build/web/rtextures.o build/web/rtext.o build/web/utils.o build/web/rmodels.o build/web/raudio.o build/web/Mesh.o build/web/Particle.o build/web/Spring.o build/web/main.o -o docs/index.html -s USE_GLFW=3 -s ASYNCIFY=1 -s TOTAL_MEMORY=134217728 -s EXPORTED_RUNTIME_METHODS=[FS] --preload-file config.txt --preload-file example_cloud.msh --shell-file docs/shell.html
 if errorlevel 1 goto error
 
 echo. > docs\.nojekyll

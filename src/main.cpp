@@ -4,10 +4,13 @@
 #include <string>
 #include <iostream>
 #include <ctime>
+#include <cstring>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
+
+#include "FileDialog.h"
 
 
 const float ANIMATION_SPEED_STEP = 0.05f;
@@ -30,6 +33,7 @@ void CameraMoveToTarget(Camera *camera, float delta);
 }
 
 void DrawCoordSystem(void);
+void DrawAxisLabels(const Camera& camera);
 
 void SetDefaultSaveFilename(char* buffer, size_t size) {
 	time_t now = time(NULL);
@@ -43,6 +47,8 @@ std::string formateFloat(float f) {
 	return std::string(buffer);
 }
 
+
+
 int main() {
 	mesh3d::Config loadedConfig = mesh3d::LoadMeshConfig("config.txt");
 	float animationSpeed = 1.0f;
@@ -50,13 +56,18 @@ int main() {
 
 	const int screenWidth = 1024;
 	const int screenHeight = 768;
-	const int panelWidth = 240;
+	const int panelWidth = 260;
 	const int panelX = screenWidth - panelWidth;
 
 	bool isRunning = false;
 	bool hasStarted = false;
 	bool showSaveDialog = false;
 	char saveFilename[256] = "config.txt";
+
+	char cloudFilename[256] = "";
+	if (loadedConfig.pointCloudFile.length() < sizeof(cloudFilename)) {
+		std::strcpy(cloudFilename, loadedConfig.pointCloudFile.c_str());
+	}
 
     InitWindow(screenWidth, screenHeight, "3D Cloth Simulation");
 
@@ -65,10 +76,31 @@ int main() {
 	mesh3d::Mesh cloth = mesh3d::Mesh(loadedConfig);
 
     while (!WindowShouldClose()) {
+#ifdef __EMSCRIPTEN__
+        // Check if a point cloud file was uploaded from the web UI
+        bool cloudReady = EM_ASM_INT({ return Module.cloudFileReady ? 1 : 0; });
+        if (cloudReady) {
+            loadedConfig.pointCloudFile = "/user_cloud.msh";
+            cloth = mesh3d::Mesh(loadedConfig);
+            msg = "Cloud loaded from web!";
+            isRunning = false;
+            hasStarted = false;
+            EM_ASM({ Module.cloudFileReady = false; });
+        }
+#endif
+
         if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
 			if (!isRunning) { hasStarted = true; isRunning = true; }
 			else { isRunning = false; }
 		};
+
+		// Restart simulation with 'r'
+		if (IsKeyPressed(KEY_R)) {
+			cloth = mesh3d::Mesh(loadedConfig);
+			msg = "Restarted!";
+			isRunning = false;
+			hasStarted = false;
+		}
 
 		// Parameter adjustments only allowed before first play
 		if (!hasStarted) {
@@ -155,19 +187,22 @@ int main() {
         cloth.Draw();
         EndMode3D();
 
-		// ---- GUI Control Panel ----
-		float cx = panelX + 20;
-		float cw = panelWidth - 40;
-		float cy = 20;
-		float ch = 28;
-		float gap = 38;
+		// Draw axis labels (in screen space, after EndMode3D)
+		DrawAxisLabels(camera);
 
-		GuiGroupBox({ (float)(panelX + 10), 10, (float)(panelWidth - 20), (float)(screenHeight - 20) }, "Control Panel");
+		// ---- GUI Control Panel ----
+		float cx = panelX + 16;
+		float cw = panelWidth - 32;
+		float cy = 12;
+		float ch = 24;
+		float gap = 32;
+
+		GuiGroupBox({ (float)(panelX + 8), 8, (float)(panelWidth - 16), (float)(screenHeight - 16) }, "Control Panel");
 
 		// Status label
 		const char* statusText = isRunning ? "Status: Running" : (hasStarted ? "Status: Paused (Locked)" : "Status: Ready");
-		GuiLabel({ cx, cy, cw, 20 }, statusText);
-		cy += 28;
+		GuiLabel({ cx, cy, cw, 18 }, statusText);
+		cy += 24;
 
 		// Play / Pause Toggle
 		bool prevRunning = isRunning;
@@ -202,7 +237,7 @@ int main() {
 			SetDefaultSaveFilename(saveFilename, sizeof(saveFilename));
 			showSaveDialog = true;
 		}
-		cy += gap + 15;
+		cy += gap + 8;
 
 		// Lock sliders after first play (drawn normally but not interactive)
 		if (hasStarted) GuiLock();
@@ -228,10 +263,65 @@ int main() {
 		GuiSlider({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", loadedConfig.airResistanceFactor), &loadedConfig.airResistanceFactor, 0.0f, 0.1f);
 		cy += gap;
 
-		GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, prevThumbColor);
-		
 		// Particle Mass Slider
 		GuiSlider({ cx, cy, cw, ch }, "Mass", TextFormat("%.2f", loadedConfig.particleMass), &loadedConfig.particleMass, 0.1f, 10.0f);
+		cy += gap;
+
+		GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, prevThumbColor);
+		
+		// ---- Point Cloud Controls ----
+		GuiLine({ cx, cy, cw, 1 }, NULL);
+		cy += 8;
+		GuiLabel({ cx, cy, cw, 18 }, "Point Cloud");
+		cy += 20;
+
+		// Display current cloud file name
+		const char* cloudDisplay = loadedConfig.pointCloudFile.empty() ? "(default grid)" : loadedConfig.pointCloudFile.c_str();
+		GuiLabel({ cx, cy, cw, ch }, TextFormat("Cloud: %s", cloudDisplay));
+		cy += gap;
+
+		// Select File button: opens a dialog (Win32) or triggers HTML upload (Web)
+		if (GuiButton({ cx, cy, cw, ch }, "Select File")) {
+#ifdef __EMSCRIPTEN__
+			EM_ASM({ document.getElementById('cloudFileInput').click(); });
+#elif defined(_WIN32)
+			if (OpenFileDialog(cloudFilename, sizeof(cloudFilename))) {
+				loadedConfig.pointCloudFile = cloudFilename;
+				std::strcpy(cloudFilename, loadedConfig.pointCloudFile.c_str());
+				cloth = mesh3d::Mesh(loadedConfig);
+				msg = "Cloud loaded!";
+				isRunning = false;
+				hasStarted = false;
+			}
+#else
+			// Linux/Mac fallback: load from the stored path
+			loadedConfig.pointCloudFile = cloudFilename;
+			cloth = mesh3d::Mesh(loadedConfig);
+			msg = "Cloud loaded!";
+			isRunning = false;
+			hasStarted = false;
+#endif
+		}
+		cy += gap;
+
+		// Spring generation seed
+		float seedFloat = static_cast<float>(loadedConfig.springSeed);
+		GuiSlider({ cx, cy, cw, ch }, "Seed", TextFormat("%.0f", seedFloat), &seedFloat, 0.0f, 999.0f);
+		loadedConfig.springSeed = static_cast<unsigned int>(seedFloat);
+		cy += gap;
+
+		// Max spring distance
+		GuiSlider({ cx, cy, cw, ch }, "Max Dist", TextFormat("%.2f", loadedConfig.maxSpringDist), &loadedConfig.maxSpringDist, 0.1f, 5.0f);
+		cy += gap;
+
+		// Max springs per particle
+		float maxSpringFloat = static_cast<float>(loadedConfig.maxSpringsPerParticle);
+		GuiSlider({ cx, cy, cw, ch }, "Max Conn", TextFormat("%.0f", maxSpringFloat), &maxSpringFloat, 1.0f, 12.0f);
+		loadedConfig.maxSpringsPerParticle = static_cast<int>(maxSpringFloat);
+		cy += gap;
+
+		// Connection probability
+		GuiSlider({ cx, cy, cw, ch }, "Conn Prob", TextFormat("%.2f", loadedConfig.springConnectProb), &loadedConfig.springConnectProb, 0.0f, 1.0f);
 		cy += gap;
 
 		GuiUnlock();
@@ -241,10 +331,8 @@ int main() {
 		GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %.0f", GetFPS()));
 
         // Text overlay in 3D area
-		// DrawText(isRunning ? "Running..." : "Paused (Press Enter/Space to continue)", 20, 20, 20, RED);
 		DrawText(msg.c_str(), 20, 20*2, 20, BLACK);
 		DrawText("Keep pressing right-mouse and drag to rotate camera", 20, 20 * 4, 20, BLACK);
-		// DrawText("Keyboard shortcuts still work!", 20, 20 * 5, 20, DARKGRAY);
 
 		// Save Config Dialog
 		if (showSaveDialog) {
@@ -283,15 +371,27 @@ int main() {
     return 0;
 }
 
-void DrawCoordSystem() {
-    const float  AXIS_LENGTH = 10.0f;
+static const float AXIS_LENGTH = 10.0f;
 
+void DrawCoordSystem() {
 	DrawGrid(10, 1.0f);
 
 	DrawLine3D({ 0, 0, 0 }, { AXIS_LENGTH, 0, 0 }, MAROON); // x
     DrawLine3D({ 0, 0, 0 }, { -AXIS_LENGTH, 0, 0 }, LIGHTGRAY); // -x
+
 	DrawLine3D({ 0, 0, 0 }, { 0, AXIS_LENGTH, 0 }, DARKGREEN); // y
 	DrawLine3D({ 0, 0, 0 }, { 0, -AXIS_LENGTH, 0 }, LIGHTGRAY); // -y
+
 	DrawLine3D({ 0, 0, 0 }, { 0, 0, AXIS_LENGTH }, DARKBLUE); // z
 	DrawLine3D({ 0, 0, 0 }, { 0, 0, -AXIS_LENGTH }, LIGHTGRAY); // -z
+}
+
+void DrawAxisLabels(const Camera& camera) {
+	Vector2 sx = GetWorldToScreen({ AXIS_LENGTH, 0, 0 }, camera);
+	Vector2 sy = GetWorldToScreen({ 0, AXIS_LENGTH, 0 }, camera);
+	Vector2 sz = GetWorldToScreen({ 0, 0, AXIS_LENGTH }, camera);
+
+	DrawText("X", (int)(sx.x + 4), (int)(sx.y - 10), 20, MAROON);
+	DrawText("Y", (int)(sy.x + 4), (int)(sy.y - 10), 20, DARKGREEN);
+	DrawText("Z", (int)(sz.x + 4), (int)(sz.y - 10), 20, DARKBLUE);
 }
