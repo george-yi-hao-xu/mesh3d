@@ -147,3 +147,14 @@ This means **the same seed always produces the same mesh topology** — perfect 
 
 1. Clone the repository
 2. Run `build.bat` to build the project
+
+## Build WASM
+
+1. Clone the repository
+2. Run `build_wasm.bat` to build the project for WebAssembly (WASM)
+3. Open `index.html` in a web browser to run the simulation in WASM
+4. You can custom the style by adding this line into `index.html`:
+
+```html
+    <link href="./my-style.css" rel="stylesheet" />
+```

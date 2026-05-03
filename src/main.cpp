@@ -73,6 +73,19 @@ int main() {
 	mesh3d::Mesh cloth = mesh3d::Mesh(loadedConfig);
 
     while (!WindowShouldClose()) {
+#ifdef __EMSCRIPTEN__
+        // Check if a point cloud file was uploaded from the web UI
+        bool cloudReady = EM_ASM_INT({ return Module.cloudFileReady ? 1 : 0; });
+        if (cloudReady) {
+            loadedConfig.pointCloudFile = "/user_cloud.msh";
+            cloth = mesh3d::Mesh(loadedConfig);
+            msg = "Cloud loaded from web!";
+            isRunning = false;
+            hasStarted = false;
+            EM_ASM({ Module.cloudFileReady = false; });
+        }
+#endif
+
         if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
 			if (!isRunning) { hasStarted = true; isRunning = true; }
 			else { isRunning = false; }
