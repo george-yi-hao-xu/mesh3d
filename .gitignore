@@ -75,6 +75,7 @@ StyleCopReport.xml
 *.ilk
 *.meta
 *.obj
+*.o
 *.iobj
 *.pch
 *.pdb
@@ -400,3 +401,9 @@ build_files
 raylib-master
 Makefile
 /*.sln
+
+# Emscripten SDK (auto-installed by build script)
+build/emsdk/
+
+# Web build temporary object files
+build/web/
