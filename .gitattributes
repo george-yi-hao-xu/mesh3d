@@ -1,1 +1,6 @@
 * text=auto
+
+docs/index.html linguist-generated=true
+docs/index.js linguist-generated=true
+docs/index.data linguist-generated=true
+docs/index.wasm linguist-generated=true
