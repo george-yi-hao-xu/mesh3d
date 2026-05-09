@@ -329,8 +329,7 @@ int main() {
 			EM_ASM({ document.getElementById('cloudFileInput').click(); });
 #elif defined(_WIN32)
 			if (OpenFileDialog(ptFileName, sizeof(ptFileName))) {
-				currConfig = mesh3d::LoadMeshConfig(configFileName); // reload config to update pointCloudFile path
-				// regen cloth
+				// Keep the current in-memory config and rebuild using the newly selected point cloud.
 				cloth = mesh3d::Mesh(currConfig, ptFileName);
 				msg = "Cloud loaded!";
 				isRunning = false;
