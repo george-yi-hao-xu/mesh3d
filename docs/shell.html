@@ -44,11 +44,15 @@
 
         <span id='controls'>
           <span><input type="button" value="📜 SOURCE CODE" onclick="window.open('https://github.com/george-yi-hao-xu/mesh3d', '_blank', 'noopener')"></span>
-          <span><input type="button" value="🖵 FULLSCREEN" onclick="Module.requestFullscreen(false, false)"></span>
+          <span><input id="fullscreen-btn" type="button" value="🖵 FULLSCREEN" onclick="Module.requestFullscreen(false, false)"></span>
           <!-- <span><input type="button" id="btn-audio" value="🔇 MUTE" onclick="toggleAudio()"></span> -->
           <span>
+            <input type="file" id="configFileInput" accept=".txt" style="display:none;">
+            <input type="button" value="⚙️ Load Config" onclick="document.getElementById('configFileInput').click()">
+          </span>
+          <span>
             <input type="file" id="cloudFileInput" accept=".msh,.txt" style="display:none;">
-            <input type="button" value="📂 Load Cloud" onclick="document.getElementById('cloudFileInput').click()">
+            <input type="button" value="📂 Load Pt Cloud" onclick="document.getElementById('cloudFileInput').click()">
           </span>
         </span>
 
@@ -166,6 +170,29 @@
             spinnerElement.style.display = 'none';
             Module.setStatus = function(text) { if (text) Module.printErr('[post-exception status] ' + text); };
         };
+    </script>
+
+    <!-- Config upload handler -->
+    <script type="text/javascript">
+      document.addEventListener('DOMContentLoaded', function(){
+        var configInput = document.getElementById('configFileInput');
+        if (configInput) {
+          configInput.addEventListener('change', function(e){
+            var file = e.target.files[0];
+            if (!file) return;
+
+            var reader = new FileReader();
+            reader.onload = function(evt){
+              var data = new Uint8Array(evt.target.result);
+              FS.writeFile('/user_config.txt', data);
+              Module.configCloudFileReady = true;
+              console.log('Config file uploaded: ', file.name, file);
+            }
+
+            reader.readAsArrayBuffer(file);
+          })
+        }
+      })
     </script>
 
     <!-- Point cloud file upload handler -->

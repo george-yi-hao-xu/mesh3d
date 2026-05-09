@@ -79,6 +79,17 @@ int main() {
 
     while (!WindowShouldClose()) {
 #ifdef __EMSCRIPTEN__
+		// check config file first
+		bool configCloudReady = EM_ASM_INT({ return Module.configCloudFileReady ? 1 : 0; });
+		if (configCloudReady) {
+			std::strcpy(configFileName, "/user_config.txt");
+			currConfig = mesh3d::LoadMeshConfig(configFileName);
+			cloth = mesh3d::Mesh(currConfig, ptFileName);
+			msg = "Config loaded from web!";
+			isRunning = false;
+			hasStarted = false;
+			EM_ASM({ Module.configCloudFileReady = false; });
+		}
         // Check if a point cloud file was uploaded from the web UI
         bool cloudReady = EM_ASM_INT({ return Module.cloudFileReady ? 1 : 0; });
         if (cloudReady) {
@@ -188,10 +199,12 @@ int main() {
 
         ClearBackground(RAYWHITE);
 
+		#pragma region 3D
         BeginMode3D(camera);
 		DrawCoordSystem();
         cloth.Draw();
         EndMode3D();
+		#pragma endregion 3D
 
 		// Draw axis labels (in screen space, after EndMode3D)
 		DrawAxisLabels(camera);
@@ -254,15 +267,14 @@ int main() {
 
 		cy += gap;
 
-		// Load/Save Config
+		#pragma region load/Save Config
 		GuiLabel({ cx, cy, cw, 18 }, TextFormat("Config File: %s", configFileName));
 		
 		cy += gap;
 
 		if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Config", !hasStarted)) {
 #ifdef __EMSCRIPTEN__
-			//todo: implement the js handler for config file upload 
-			// EM_ASM({ document.getElementById('configFileInput').click(); });
+			EM_ASM({ document.getElementById('configFileInput').click(); });
 #elif defined(_WIN32)
 			if (OpenFileDialog(configFileName, sizeof(configFileName))) {
 				// open a window to pick config file
@@ -281,9 +293,9 @@ int main() {
 			showSaveDialog = true;
 		}
 		cy += gap + 8;
+		#pragma endregion load/Save Config
 
 		#pragma region Cfg_Slider
-
 		// Animation Speed Slider
 		Mesh3dSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.2f", animationSpeed), &animationSpeed, 0.05f, 3.0f, !hasStarted);
 		cy += gap;
@@ -307,7 +319,6 @@ int main() {
 		// Particle Mass Slider
 		Mesh3dSlider({ cx, cy, cw, ch }, "Mass", TextFormat("%.2f", currConfig.particleMass), &currConfig.particleMass, 0.1f, 10.0f, !hasStarted);
 		cy += gap;
-		
 		#pragma endregion
 
 		#pragma region Pt_Cld

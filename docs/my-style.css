@@ -110,6 +110,10 @@ canvas.emscripten {
     gap: var(--space-sm);
 }
 
+#fullscreen-btn {
+    display: none;
+}
+
 #output {
   border: none;
   padding: 0;
