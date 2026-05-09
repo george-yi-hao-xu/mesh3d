@@ -218,12 +218,14 @@ namespace mesh3d {
     }
 
     void Mesh::BuildFromPointCloud(const Config& c) {
+        // gen points first
         particles = LoadPointCloud(c.pointCloudFile);
         if (particles.empty()) {
             std::cerr << "Point cloud file empty or failed to load. Falling back to regular grid." << std::endl;
             BuildRegularGrid(c);
             return;
         }
+        // then gen springs
         GenerateRandomSprings(c.springSeed, c.maxSpringDist, c.maxSpringsPerParticle, c.springConnectProb);
     }
 
@@ -269,18 +271,6 @@ namespace mesh3d {
         }
 
         return true;
-    }
-
-    void Mesh::SetStiffness(float stiff) {
-        springStiffness = stiff;
-    }
-
-    void Mesh::SetDampingFactor(float dFactor) {
-        dampingFactor = dFactor;
-    }
-
-    void Mesh::SetAirResistanceFactor(float arFactor) {
-        airResistanceFactor = arFactor;
     }
 
     void Mesh::Draw() {

@@ -51,6 +51,7 @@ std::string formateFloat(float f) {
 
 int main() {
 	mesh3d::Config loadedConfig = mesh3d::LoadMeshConfig("config.txt");
+
 	float animationSpeed = 1.0f;
 	std::string msg = "Press r to restart simulation";
 
@@ -64,7 +65,9 @@ int main() {
 	bool showSaveDialog = false;
 	char saveFilename[256] = "config.txt";
 
-	char cloudFilename[256] = "";
+	char cloudFilename[256] = "???";
+	char configFileName[256] = "config.txt";
+
 	if (loadedConfig.pointCloudFile.length() < sizeof(cloudFilename)) {
 		std::strcpy(cloudFilename, loadedConfig.pointCloudFile.c_str());
 	}
@@ -265,8 +268,28 @@ int main() {
 
 		cy += gap;
 
-		// Save Config Button
-		if (GuiButton({ cx, cy, cw, ch }, "Save Config")) {
+		// Load/Save Config
+		GuiLabel({ cx, cy, cw, 18 }, TextFormat("Config File: %s", configFileName));
+		
+		cy += gap;
+
+		if (GuiButton({ cx, cy, cw / 2, ch }, "Load Config")) {
+#ifdef __EMSCRIPTEN__
+			EM_ASM({ document.getElementById('configFileInput').click(); });
+#elif defined(_WIN32)
+			if (OpenFileDialog(configFileName, sizeof(configFileName))) {
+				// open a window to pick config file
+				loadedConfig = mesh3d::LoadMeshConfig(configFileName);
+				cloth = mesh3d::Mesh(loadedConfig);
+				msg = "Config loaded!";
+				isRunning = false;
+				hasStarted = false;
+			}
+#else
+#endif
+		}
+
+		if (GuiButton({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Save Config")) {
 			SetDefaultSaveFilename(saveFilename, sizeof(saveFilename));
 			showSaveDialog = true;
 		}
@@ -314,17 +337,17 @@ int main() {
 
 		// Display current cloud file name
 		const char* cloudDisplay = loadedConfig.pointCloudFile.empty() ? "(default grid)" : loadedConfig.pointCloudFile.c_str();
-		GuiLabel({ cx, cy, cw, ch }, TextFormat("Cloud: %s", cloudDisplay));
+		GuiLabel({ cx, cy, cw, ch }, TextFormat("File Name: %s", cloudDisplay));
 		cy += gap;
 
 		// Select File button: opens a dialog (Win32) or triggers HTML upload (Web)
-		if (GuiButton({ cx, cy, cw / 2, ch }, "Select File")) {
+		if (GuiButton({ cx, cy, cw / 2, ch }, "Select Points Cloud File")) {
 #ifdef __EMSCRIPTEN__
 			EM_ASM({ document.getElementById('cloudFileInput').click(); });
 #elif defined(_WIN32)
 			if (OpenFileDialog(cloudFilename, sizeof(cloudFilename))) {
-				loadedConfig.pointCloudFile = cloudFilename;
-				std::strcpy(cloudFilename, loadedConfig.pointCloudFile.c_str());
+				loadedConfig = mesh3d::LoadMeshConfig(configFileName); // reload config to update pointCloudFile path
+				// regen cloth
 				cloth = mesh3d::Mesh(loadedConfig);
 				msg = "Cloud loaded!";
 				isRunning = false;

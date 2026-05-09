@@ -44,8 +44,5 @@ namespace mesh3d{
         Mesh(const Config& config);
         bool Update(float dt);
         void Draw();
-        void SetStiffness(float stiff);
-        void SetDampingFactor(float dFactor);
-        void SetAirResistanceFactor(float arFactor);
     };
 } // namespace mesh3d
