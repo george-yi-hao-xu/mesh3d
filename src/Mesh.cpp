@@ -240,7 +240,7 @@ namespace mesh3d {
         airResistanceFactor = c.airResistanceFactor;
         gravity = c.gravity;
 
-        if (ptFileName != nullptr && std::string(ptFileName) != "") {
+        if (ptFileName != nullptr && ptFileName[0] != '\0') {
             BuildFromPointCloud(c, ptFileName);
         } else {
             BuildRegularGrid(c);
