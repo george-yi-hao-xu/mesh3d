@@ -4,3 +4,6 @@ docs/index.html linguist-generated=true
 docs/index.js linguist-generated=true
 docs/index.data linguist-generated=true
 docs/index.wasm linguist-generated=true
+
+.vscode/* linguist-generated=true
+build/emsdk/* linguist-generated=true

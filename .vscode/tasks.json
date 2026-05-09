@@ -3,103 +3,58 @@
     "tasks": [
         {
             "label": "build debug",
-            "type": "process",
-            "command": "make",
-            "windows": {
-                "command": "mingw32-make.exe"
-            },
-            "osx": {
-                "args": [
-                    "config=debug_arm64"
-                ]
-            },
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-B", "build/desktop",
+                "-S", ".",
+                "-G", "MinGW Makefiles",
+                "-DCMAKE_BUILD_TYPE=Debug"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": false
             },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "dependsOn": [
-                "UpdateMake"
-            ]
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "build debug (compile)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build/desktop"],
+            "group": "build",
+            "problemMatcher": ["$gcc"],
+            "dependsOn": ["build debug"]
         },
         {
             "label": "build release",
-            "type": "process",
-            "command": "make",
-            "windows": {
-                "command": "mingw32-make.exe",
-                "args": [
-                    "config=release_x64"
-                ]
-            },
-            "linux": {
-                "args": [
-                    "config=release_x64"
-                ]
-            },
-            "osx": {
-                "args": [
-                    "config=release_arm64"
-                ]
-            },
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-B", "build/desktop",
+                "-S", ".",
+                "-G", "MinGW Makefiles",
+                "-DCMAKE_BUILD_TYPE=Release"
             ],
-            "dependsOn": [
-                "UpdateMake"
-            ]
+            "group": "build",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "build release (compile)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build/desktop"],
+            "group": "build",
+            "problemMatcher": ["$gcc"],
+            "dependsOn": ["build release"]
         },
         {
             "label": "Clean",
-            "type": "process",
-            "command": "make",
-            "windows": {
-                "command": "mingw32-make.exe",
-                "args": [
-                    "clean"
-                ]
-            },
-            "linux": {
-                "args": [
-                    "clean"
-                ]
-            },
-            "osx": {
-                "args": [
-                    "clean"
-                ]
-            },
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build/desktop", "--target", "clean"],
             "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "dependsOn": [
-                "UpdateMake"
-            ]
-        },
-        {
-            "label": "UpdateMake",
-            "type": "process",
-            "command": "./premake5",
-            "options": {
-                "cwd": "${workspaceFolder}/build/"
-            },
-            "args": [
-                "gmake2"
-            ],
-            "windows": {
-                "command": "./premake5.exe"
-            },
-            "linux": {
-                "command": "./premake5"
-            },
-            "osx": {
-                "command": "premake5.osx"
-            },
-            "group": "build"
+            "problemMatcher": ["$gcc"]
         },
         {
             "type": "cppbuild",
