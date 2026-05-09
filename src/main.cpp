@@ -34,6 +34,8 @@ void CameraMoveToTarget(Camera *camera, float delta);
 
 void DrawCoordSystem(void);
 void DrawAxisLabels(const Camera& camera);
+int Mesh3dBtn(Rectangle pos, const char* label, bool active = true);
+int Mesh3dSlider(Rectangle pos, const char* textLeft, const char* textRight, float* value, float minValue, float maxValue, bool active = true);
 
 void SetDefaultSaveFilename(char* buffer, size_t size) {
 	time_t now = time(NULL);
@@ -50,7 +52,8 @@ std::string formateFloat(float f) {
 
 
 int main() {
-	mesh3d::Config loadedConfig = mesh3d::LoadMeshConfig("config.txt");
+	mesh3d::Config currConfig = mesh3d::LoadMeshConfig("default_config.txt");
+
 	float animationSpeed = 1.0f;
 	std::string msg = "Press r to restart simulation";
 
@@ -64,24 +67,34 @@ int main() {
 	bool showSaveDialog = false;
 	char saveFilename[256] = "config.txt";
 
-	char cloudFilename[256] = "";
-	if (loadedConfig.pointCloudFile.length() < sizeof(cloudFilename)) {
-		std::strcpy(cloudFilename, loadedConfig.pointCloudFile.c_str());
-	}
+	char ptFileName[256] = "example_cloud.msh";
+	char configFileName[256] = "default_config.txt";
+
 
     InitWindow(screenWidth, screenHeight, "3D Cloth Simulation");
 
     Camera camera = { { 15.0f, 15.0f, 15.0f }, { 0.0f, -2.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 60.0f, CAMERA_PERSPECTIVE };
 
-	mesh3d::Mesh cloth = mesh3d::Mesh(loadedConfig);
+	mesh3d::Mesh cloth = mesh3d::Mesh(currConfig, ptFileName);
 
     while (!WindowShouldClose()) {
 #ifdef __EMSCRIPTEN__
+		// check config file first
+		bool configCloudReady = EM_ASM_INT({ return Module.configCloudFileReady ? 1 : 0; });
+		if (configCloudReady) {
+			std::strcpy(configFileName, "/user_config.txt");
+			currConfig = mesh3d::LoadMeshConfig(configFileName);
+			cloth = mesh3d::Mesh(currConfig, ptFileName);
+			msg = "Config loaded from web!";
+			isRunning = false;
+			hasStarted = false;
+			EM_ASM({ Module.configCloudFileReady = false; });
+		}
         // Check if a point cloud file was uploaded from the web UI
         bool cloudReady = EM_ASM_INT({ return Module.cloudFileReady ? 1 : 0; });
         if (cloudReady) {
-            loadedConfig.pointCloudFile = "/user_cloud.msh";
-            cloth = mesh3d::Mesh(loadedConfig);
+            std::strcpy(ptFileName, "/user_cloud.msh");
+            cloth = mesh3d::Mesh(currConfig, ptFileName);
             msg = "Cloud loaded from web!";
             isRunning = false;
             hasStarted = false;
@@ -96,7 +109,7 @@ int main() {
 
 		// Restart simulation with 'r'
 		if (IsKeyPressed(KEY_R)) {
-			cloth = mesh3d::Mesh(loadedConfig);
+			cloth = mesh3d::Mesh(currConfig, ptFileName);
 			msg = "Restarted!";
 			isRunning = false;
 			hasStarted = false;
@@ -111,26 +124,26 @@ int main() {
 			}
 
 			// increase or decrease stiffness
-			if (IsKeyPressed(KEY_M)) { loadedConfig.stiffness += 1.0f; }
+			if (IsKeyPressed(KEY_M)) { currConfig.stiffness += 1.0f; }
 			if (IsKeyPressed(KEY_N)) {
-				if (loadedConfig.stiffness > 1.0f) loadedConfig.stiffness -= 1.0f;
+				if (currConfig.stiffness > 1.0f) currConfig.stiffness -= 1.0f;
 			}
 			
 			// increase or decrease damping factor
-			if (IsKeyPressed(KEY_P)) { loadedConfig.dampingFactor += 0.1f; }
+			if (IsKeyPressed(KEY_P)) { currConfig.dampingFactor += 0.1f; }
 			if (IsKeyPressed(KEY_O)) {
-				if (loadedConfig.dampingFactor >= 0.1f) loadedConfig.dampingFactor -= 0.1f;
+				if (currConfig.dampingFactor >= 0.1f) currConfig.dampingFactor -= 0.1f;
 			}
 
 			// increase or decrease air resistance factor
-			if (IsKeyPressed(KEY_K)) { loadedConfig.airResistanceFactor += 0.001f; }
+			if (IsKeyPressed(KEY_K)) { currConfig.airResistanceFactor += 0.001f; }
 			if (IsKeyPressed(KEY_J)) {
-				if (loadedConfig.airResistanceFactor >= 0.001f) loadedConfig.airResistanceFactor -= 0.001f;
+				if (currConfig.airResistanceFactor >= 0.001f) currConfig.airResistanceFactor -= 0.001f;
 			}
 
 			// increase or decrease gravity
-			if (IsKeyPressed(KEY_G)) { loadedConfig.gravity += 0.5f; }
-			if (IsKeyPressed(KEY_F)) { loadedConfig.gravity -= 0.5f; }
+			if (IsKeyPressed(KEY_G)) { currConfig.gravity += 0.5f; }
+			if (IsKeyPressed(KEY_F)) { currConfig.gravity -= 0.5f; }
 		}
 
 		// if window moves, then stop simulation
@@ -186,10 +199,12 @@ int main() {
 
         ClearBackground(RAYWHITE);
 
+		#pragma region 3D
         BeginMode3D(camera);
 		DrawCoordSystem();
         cloth.Draw();
         EndMode3D();
+		#pragma endregion 3D
 
 		// Draw axis labels (in screen space, after EndMode3D)
 		DrawAxisLabels(camera);
@@ -211,52 +226,39 @@ int main() {
 		// draw 2 buttons based on hasStarted and isRunning states
 		if (!hasStarted) {
 			// draw an active START button and a disabled RESET button
-			auto pressedStart = GuiButton({ cx, cy, cw, ch }, "Start Simulation");
-			if (pressedStart) {
-				cloth = mesh3d::Mesh(loadedConfig); // re-create cloth to apply any config param changes
+			if (Mesh3dBtn({ cx, cy, cw, ch }, "Start Simulation")) {
+				cloth = mesh3d::Mesh(currConfig, ptFileName); // re-create cloth to apply any config param changes
 				hasStarted = true;
 				isRunning = true;
 			}
 
 			cy += gap;
 
-			GuiLock();
-			auto prevState = GuiGetState();
-			GuiSetState(STATE_DISABLED);
-			auto pressedReset = GuiButton({ cx, cy, cw, ch }, "Reset Simulation");
-			if (pressedReset) {
-				// This button is locked and won't do anything
-			}
-			GuiUnlock();
-			GuiSetState(prevState);
+			auto pressedReset = Mesh3dBtn({ cx, cy, cw, ch }, "Reset Simulation", false);
 		} else if (hasStarted && isRunning) {
 			// ok, started and is running, show an active PAUSE button and an active RESET button
-			auto pressedPause = GuiButton({ cx, cy, cw, ch }, "Pause Simulation");
-			if (pressedPause) {
+			if(Mesh3dBtn({ cx, cy, cw, ch }, "Pause Simulation")) {
 				isRunning = false;
 			}
 
 			cy += gap;
 
-			auto pressedReset = GuiButton({ cx, cy, cw, ch }, "Reset Simulation");
-			if (pressedReset) {
-				cloth = mesh3d::Mesh(loadedConfig);
+			if(Mesh3dBtn({ cx, cy, cw, ch }, "Reset Simulation")) {
+				cloth = mesh3d::Mesh(currConfig, ptFileName);
 				msg = "Restarted!";
 				isRunning = false;
 				hasStarted = false;
 			}
 		} else if (hasStarted && !isRunning) {
 			// ok, started but paused, show an active RESUME button and an active RESET button
-			auto pressedResume = GuiButton({ cx, cy, cw, ch }, "Resume Simulation");
-			if (pressedResume) {
+			if(Mesh3dBtn({ cx, cy, cw, ch }, "Resume Simulation")) {
 				isRunning = true;
 			}
 
 			cy += gap;
 
-			auto pressedReset = GuiButton({ cx, cy, cw, ch }, "Reset Simulation");
-			if (pressedReset) {
-				cloth = mesh3d::Mesh(loadedConfig);
+			if(Mesh3dBtn({ cx, cy, cw, ch }, "Reset Simulation")) {
+				cloth = mesh3d::Mesh(currConfig, ptFileName);
 				msg = "Restarted!";
 				isRunning = false;
 				hasStarted = false;
@@ -265,47 +267,61 @@ int main() {
 
 		cy += gap;
 
-		// Save Config Button
-		if (GuiButton({ cx, cy, cw, ch }, "Save Config")) {
+		#pragma region load/Save Config
+		GuiLabel({ cx, cy, cw, 18 }, TextFormat("Config File: %s", configFileName));
+		
+		cy += gap;
+
+		if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Config", !hasStarted)) {
+#ifdef __EMSCRIPTEN__
+			EM_ASM({ document.getElementById('configFileInput').click(); });
+#elif defined(_WIN32)
+			if (OpenFileDialog(configFileName, sizeof(configFileName))) {
+				// open a window to pick config file
+				currConfig = mesh3d::LoadMeshConfig(configFileName);
+				cloth = mesh3d::Mesh(currConfig, ptFileName);
+				msg = "Config loaded!";
+				isRunning = false;
+				hasStarted = false;
+			}
+#else
+#endif
+		}
+
+		if (Mesh3dBtn({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Save Config", !hasStarted)) {
 			SetDefaultSaveFilename(saveFilename, sizeof(saveFilename));
 			showSaveDialog = true;
 		}
 		cy += gap + 8;
+		#pragma endregion load/Save Config
 
-		// Lock sliders after first play (drawn normally but not interactive)
-		if (hasStarted) GuiLock();
-
-		#pragma region Sliders (only interactive when paused)
-		// Make thumb bright red when running for better visibility
-		int prevThumbColor = GuiGetStyle(SLIDER, BASE_COLOR_PRESSED);
-		if (hasStarted) GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, ColorToInt(GRAY));
-
+		#pragma region Cfg_Slider
 		// Animation Speed Slider
-		GuiSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.2f", animationSpeed), &animationSpeed, 0.05f, 3.0f);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.2f", animationSpeed), &animationSpeed, 0.05f, 3.0f, !hasStarted);
 		cy += gap;
 
 		// Stiffness Slider
-		GuiSlider({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", loadedConfig.stiffness), &loadedConfig.stiffness, 1.0f, 50.0f);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", currConfig.stiffness), &currConfig.stiffness, 1.0f, 50.0f, !hasStarted);
 		cy += gap;
 
 		// Damping Slider
-		GuiSlider({ cx, cy, cw, ch }, "Damping", TextFormat("%.2f", loadedConfig.dampingFactor), &loadedConfig.dampingFactor, 0.0f, 5.0f);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Damping", TextFormat("%.2f", currConfig.dampingFactor), &currConfig.dampingFactor, 0.0f, 5.0f, !hasStarted);
 		cy += gap;
 
 		// Air Resistance Slider
-		GuiSlider({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", loadedConfig.airResistanceFactor), &loadedConfig.airResistanceFactor, 0.0f, 0.1f);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", currConfig.airResistanceFactor), &currConfig.airResistanceFactor, 0.0f, 0.1f, !hasStarted);
 		cy += gap;
 
 		// Gravity Slider
-		GuiSlider({ cx, cy, cw, ch }, "Gravity", TextFormat("%.2f", loadedConfig.gravity), &loadedConfig.gravity, -20.0f, 20.0f);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Gravity", TextFormat("%.2f", currConfig.gravity), &currConfig.gravity, -20.0f, 20.0f, !hasStarted);
 		cy += gap;
 
 		// Particle Mass Slider
-		GuiSlider({ cx, cy, cw, ch }, "Mass", TextFormat("%.2f", loadedConfig.particleMass), &loadedConfig.particleMass, 0.1f, 10.0f);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Mass", TextFormat("%.2f", currConfig.particleMass), &currConfig.particleMass, 0.1f, 10.0f, !hasStarted);
 		cy += gap;
+		#pragma endregion
 
-		GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, prevThumbColor);
-		
+		#pragma region Pt_Cld
 		// ---- Point Cloud Controls ----
 		GuiLine({ cx, cy, cw, 1 }, NULL);
 		cy += 8;
@@ -313,19 +329,17 @@ int main() {
 		cy += 20;
 
 		// Display current cloud file name
-		const char* cloudDisplay = loadedConfig.pointCloudFile.empty() ? "(default grid)" : loadedConfig.pointCloudFile.c_str();
-		GuiLabel({ cx, cy, cw, ch }, TextFormat("Cloud: %s", cloudDisplay));
+		GuiLabel({ cx, cy, cw, ch }, TextFormat("File Name: %s", ptFileName[0] != '\0' ? ptFileName : "Missing"));
 		cy += gap;
 
 		// Select File button: opens a dialog (Win32) or triggers HTML upload (Web)
-		if (GuiButton({ cx, cy, cw, ch }, "Select File")) {
+		if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Select Pts File", !hasStarted)) {
 #ifdef __EMSCRIPTEN__
 			EM_ASM({ document.getElementById('cloudFileInput').click(); });
 #elif defined(_WIN32)
-			if (OpenFileDialog(cloudFilename, sizeof(cloudFilename))) {
-				loadedConfig.pointCloudFile = cloudFilename;
-				std::strcpy(cloudFilename, loadedConfig.pointCloudFile.c_str());
-				cloth = mesh3d::Mesh(loadedConfig);
+			if (OpenFileDialog(ptFileName, sizeof(ptFileName))) {
+				// Keep the current in-memory config and rebuild using the newly selected point cloud.
+				cloth = mesh3d::Mesh(currConfig, ptFileName);
 				msg = "Cloud loaded!";
 				isRunning = false;
 				hasStarted = false;
@@ -339,37 +353,42 @@ int main() {
 			hasStarted = false;
 #endif
 		}
+
+		// regen-mesh btn
+		if (Mesh3dBtn({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Regen Springs", !isRunning && !hasStarted)) {
+			cloth = mesh3d::Mesh(currConfig, ptFileName);
+			msg = "Mesh regenerated!";
+		}
+
 		cy += gap;
 
 		// Spring generation seed
-		float seedFloat = static_cast<float>(loadedConfig.springSeed);
-		GuiSlider({ cx, cy, cw, ch }, "Seed", TextFormat("%.0f", seedFloat), &seedFloat, 0.0f, 999.0f);
-		loadedConfig.springSeed = static_cast<unsigned int>(seedFloat);
+		float seedFloat = static_cast<float>(currConfig.springSeed);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Seed", TextFormat("%.0f", seedFloat), &seedFloat, 0.0f, 999.0f, !hasStarted);
+		currConfig.springSeed = static_cast<unsigned int>(seedFloat);
 		cy += gap;
 
 		// Max spring distance
-		GuiSlider({ cx, cy, cw, ch }, "Max Dist", TextFormat("%.2f", loadedConfig.maxSpringDist), &loadedConfig.maxSpringDist, 0.1f, 5.0f);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Max Dist", TextFormat("%.2f", currConfig.maxSpringDist), &currConfig.maxSpringDist, 0.1f, 5.0f, !hasStarted);
 		cy += gap;
 
 		// Max springs per particle
-		float maxSpringFloat = static_cast<float>(loadedConfig.maxSpringsPerParticle);
-		GuiSlider({ cx, cy, cw, ch }, "Max Conn", TextFormat("%.0f", maxSpringFloat), &maxSpringFloat, 1.0f, 12.0f);
-		loadedConfig.maxSpringsPerParticle = static_cast<int>(maxSpringFloat);
+		float maxSpringFloat = static_cast<float>(currConfig.maxSpringsPerParticle);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Max Conn", TextFormat("%.0f", maxSpringFloat), &maxSpringFloat, 1.0f, 12.0f, !hasStarted);
+		currConfig.maxSpringsPerParticle = static_cast<int>(maxSpringFloat);
 		cy += gap;
 
 		// Connection probability
-		GuiSlider({ cx, cy, cw, ch }, "Conn Prob", TextFormat("%.2f", loadedConfig.springConnectProb), &loadedConfig.springConnectProb, 0.0f, 1.0f);
+		Mesh3dSlider({ cx, cy, cw, ch }, "Conn Prob", TextFormat("%.2f", currConfig.springConnectProb), &currConfig.springConnectProb, 0.0f, 1.0f, !hasStarted);
 		cy += gap;
 
-		GuiUnlock();
-		#pragma endregion
-
 		// FPS display
-		GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %.0f", GetFPS()));
+		GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %d", GetFPS()));
 
         // Text overlay in 3D area
 		DrawText(msg.c_str(), 20, 20*2, 20, BLACK);
-		DrawText("Keep pressing right-mouse and drag to rotate camera", 20, 20 * 4, 20, BLACK);
+		DrawText("Keep pressing right-mouse to rotate camera.", 20, 20 * 4, 20, BLACK);
+		#pragma endregion Pt_Cld
 
 		// Save Config Dialog
 		if (showSaveDialog) {
@@ -377,7 +396,7 @@ int main() {
 			Rectangle dialogRec = { (float)(screenWidth / 2 - 200), (float)(screenHeight / 2 - 100), 400, 200 };
 			int result = GuiTextInputBox(dialogRec, "Save Configuration", "Enter filename:", "OK;Cancel", saveFilename, 256, NULL);
 			if (result == 1) {
-				mesh3d::WriteConfig(saveFilename, loadedConfig);
+				mesh3d::WriteConfig(saveFilename, currConfig);
 				msg = "Config saved!";
 				showSaveDialog = false;
 #ifdef __EMSCRIPTEN__
@@ -431,4 +450,37 @@ void DrawAxisLabels(const Camera& camera) {
 	DrawText("X", (int)(sx.x + 4), (int)(sx.y - 10), 20, MAROON);
 	DrawText("Y", (int)(sy.x + 4), (int)(sy.y - 10), 20, DARKGREEN);
 	DrawText("Z", (int)(sz.x + 4), (int)(sz.y - 10), 20, DARKBLUE);
+}
+
+int Mesh3dBtn(Rectangle pos, const char* label, bool active) {
+	if (active) {
+		return GuiButton(pos, label);
+	} else {
+		GuiLock();
+		auto prevState = GuiGetState();
+		GuiSetState(STATE_DISABLED);
+		int result = GuiButton(pos, label);
+		GuiSetState(prevState);
+		GuiUnlock();
+		return result;
+	}
+}
+
+int Mesh3dSlider(Rectangle pos, const char* textLeft, const char* textRight, float* value, float minValue, float maxValue, bool active) {
+	if (active) {
+		return GuiSlider(pos, textLeft, textRight, value, minValue, maxValue);
+	} else {
+		GuiLock();
+		// auto prevState = GuiGetState();
+		// GuiSetState(STATE_DISABLED);
+		auto prevSliderColor = GuiGetStyle(SLIDER, BASE_COLOR_PRESSED);
+		GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, ColorToInt(GRAY));
+		
+		int result = GuiSlider(pos, textLeft, textRight, value, minValue, maxValue);
+		
+		// GuiSetState(prevState);
+		GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, prevSliderColor);
+		GuiUnlock();
+		return result;
+	}
 }

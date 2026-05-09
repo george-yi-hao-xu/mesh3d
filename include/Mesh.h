@@ -37,15 +37,12 @@ namespace mesh3d{
         float gravity = 9.8f;
 
         void BuildRegularGrid(const Config& c);
-        void BuildFromPointCloud(const Config& c);
+        void BuildFromPointCloud(const Config& c, const char* ptFileName = nullptr);
         static std::vector<Particle> LoadPointCloud(const std::string& path);
         void GenerateRandomSprings(unsigned int seed, float maxDist, int maxPerParticle, float prob);
     public:
-        Mesh(const Config& config);
+        Mesh(const Config& config, const char* ptFileName = nullptr);
         bool Update(float dt);
         void Draw();
-        void SetStiffness(float stiff);
-        void SetDampingFactor(float dFactor);
-        void SetAirResistanceFactor(float arFactor);
     };
 } // namespace mesh3d

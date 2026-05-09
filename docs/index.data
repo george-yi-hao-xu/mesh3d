@@ -6,7 +6,6 @@ particleMass=1
 dampingFactor=1.5
 airResistanceFactor=0.01
 gravity=-9.8
-pointCloudFile=example_cloud.msh
 springSeed=42
 maxSpringDist=1.5
 maxSpringsPerParticle=4

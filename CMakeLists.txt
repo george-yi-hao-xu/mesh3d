@@ -104,7 +104,7 @@ if(EMSCRIPTEN)
         "SHELL:-s ASYNCIFY=1"
         "SHELL:-s TOTAL_MEMORY=134217728"
         "SHELL:-s EXPORTED_RUNTIME_METHODS=['FS']"
-        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/config.txt@config.txt"
+        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/default_config.txt@default_config.txt"
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/example_cloud.msh@example_cloud.msh"
         "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/docs/shell.html"
     )

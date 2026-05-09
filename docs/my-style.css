@@ -1,11 +1,138 @@
 /* custom style to hide header etc */
 
-#output{
+/* variables */
+:root {
+    --space-sm: 5px;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: "Lucida Console", Monaco, monospace;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+body {
+  margin: 0;
+  padding: var(--space-sm);
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+#header {
+  display: flex;
+  width: 100%;
+  padding: 0;
+}
+
+div.emscripten_border {
+  flex: 1;
+}
+
+/* NOTE: Canvas *must not* have any border or padding, or mouse coords will be wrong */
+canvas.emscripten {
+  border: 0px none;
+  background: black;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.spinner {
+  height: 10px;
+  width: 10px;
+  margin: 0;
+  margin: 0;
+  vertical-align: top;
+  -webkit-animation: rotation 0.8s linear infinite;
+  -moz-animation: rotation 0.8s linear infinite;
+  -o-animation: rotation 0.8s linear infinite;
+  animation: rotation 0.8s linear infinite;
+  border-left: 5px solid black;
+  border-right: 5px solid black;
+  border-bottom: 5px solid black;
+  border-top: 5px solid red;
+  border-radius: 100%;
+  background-color: rgb(245, 245, 245);
+}
+@-webkit-keyframes rotation {
+  from {
+    -webkit-transform: rotate(0deg);
+  }
+  to {
+    -webkit-transform: rotate(360deg);
+  }
+}
+@-moz-keyframes rotation {
+  from {
+    -moz-transform: rotate(0deg);
+  }
+  to {
+    -moz-transform: rotate(360deg);
+  }
+}
+@-o-keyframes rotation {
+  from {
+    -o-transform: rotate(0deg);
+  }
+  to {
+    -o-transform: rotate(360deg);
+  }
+}
+@keyframes rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#status {
+  display: inline-block;
+  vertical-align: top;
+  margin: 0;
+  font-weight: bold;
+  color: rgb(40, 40, 40);
+}
+
+#progress {
+  height: 0px;
+  width: 0px;
+}
+
+#controls {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+#fullscreen-btn {
     display: none;
 }
 
-canvas.emscripten {
-    max-width: 100%;
-    width: unset;
-    max-height: 100%;
+#output {
+  border: none;
+  padding: 0;
+  width: 100%;
+  height: 120px;
+  margin: 0;
+  color: rgb(37, 174, 38);
+  outline: none;
+}
+
+input[type="button"] {
+  border: 1px solid white;
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0 var(--space-sm);
+}
+
+input[type="button"]:hover {
+  background-color: #f5f5f5ff;
+  border-color: lightblue;
 }
