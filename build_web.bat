@@ -29,12 +29,7 @@ cmake --build build/web
 if errorlevel 1 goto error
 
 echo [Publish]
-robocopy "build\web" "docs" /E
-set rc=%ERRORLEVEL%
-if %rc% GEQ 8 (
-    echo ERROR: Failed to copy build/web to docs (robocopy exit %rc%).
-    goto error
-)
+echo Web build artifacts are generated directly in docs\.
 
 echo. > docs\.nojekyll
 
