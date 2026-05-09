@@ -68,7 +68,7 @@ int main() {
 	char saveFilename[256] = "config.txt";
 
 	char ptFileName[256] = "";
-	char configFileName[256] = "";
+	char configFileName[256] = "config.txt";
 
 
     InitWindow(screenWidth, screenHeight, "3D Cloth Simulation");
