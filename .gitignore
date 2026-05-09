@@ -405,5 +405,7 @@ Makefile
 # Emscripten SDK (auto-installed by build script)
 build/emsdk/
 
+build/desktop/
+
 # Web build temporary object files
 build/web/

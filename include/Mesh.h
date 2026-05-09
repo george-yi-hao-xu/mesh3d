@@ -13,6 +13,7 @@ namespace mesh3d{
         float particleMass = 1.0f;
         float dampingFactor = 0.1f;
         float airResistanceFactor = 0.001f;
+        float gravity = 9.8f;
         std::string pointCloudFile = "";
         unsigned int springSeed = 42;
         float maxSpringDist = 1.5f;
@@ -28,9 +29,12 @@ namespace mesh3d{
         int width, height;
         std::vector<Particle> particles;
         std::vector<Spring> springs;
+
+        // default
         float springStiffness = 20.0f;
         float dampingFactor = 10.0f;
         float airResistanceFactor = 0.001f;
+        float gravity = 9.8f;
 
         void BuildRegularGrid(const Config& c);
         void BuildFromPointCloud(const Config& c);

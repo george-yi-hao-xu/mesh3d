@@ -23,6 +23,7 @@ namespace mesh3d {
             if (std::getline(iss, key, '=')) {
                 std::string value;
                 if (std::getline(iss, value)) {
+                    value.erase(value.find_last_not_of(" \t\r\n") + 1);
                     if (key == "width") config.width = std::stoi(value);
                     else if (key == "height") config.height = std::stoi(value);
                     else if (key == "spacing") config.spacing = std::stof(value);
@@ -30,6 +31,7 @@ namespace mesh3d {
                     else if (key == "particleMass") config.particleMass = std::stof(value);
                     else if (key == "dampingFactor") config.dampingFactor = std::stof(value);
                     else if (key == "airResistanceFactor") config.airResistanceFactor = std::stof(value);
+                    else if (key == "gravity") config.gravity = std::stof(value);
                     else if (key == "pointCloudFile") config.pointCloudFile = value;
                     else if (key == "springSeed") config.springSeed = static_cast<unsigned int>(std::stoul(value));
                     else if (key == "maxSpringDist") config.maxSpringDist = std::stof(value);
@@ -50,6 +52,7 @@ namespace mesh3d {
         file << "particleMass=" << config.particleMass << "\n";
         file << "dampingFactor=" << config.dampingFactor << "\n";
         file << "airResistanceFactor=" << config.airResistanceFactor << "\n";
+        file << "gravity=" << config.gravity << "\n";
         file << "pointCloudFile=" << config.pointCloudFile << "\n";
         file << "springSeed=" << config.springSeed << "\n";
         file << "maxSpringDist=" << config.maxSpringDist << "\n";
@@ -89,6 +92,7 @@ namespace mesh3d {
 
         std::string line;
         while (std::getline(file, line)) {
+            line.erase(line.find_last_not_of(" \t\r\n") + 1);
             if (line.empty() || line[0] == '#') continue;
 
             std::istringstream iss(line);
@@ -223,7 +227,12 @@ namespace mesh3d {
         GenerateRandomSprings(c.springSeed, c.maxSpringDist, c.maxSpringsPerParticle, c.springConnectProb);
     }
 
-    Mesh::Mesh(const Config& c): width(c.width), height(c.height), springStiffness(c.stiffness), dampingFactor(c.dampingFactor), airResistanceFactor(c.airResistanceFactor) {
+    Mesh::Mesh(const Config& c) {
+        springStiffness = c.stiffness;
+        dampingFactor = c.dampingFactor;
+        airResistanceFactor = c.airResistanceFactor;
+        gravity = c.gravity;
+
         if (!c.pointCloudFile.empty()) {
             BuildFromPointCloud(c);
         } else {
@@ -235,7 +244,7 @@ namespace mesh3d {
         if (dt <= 0.0f) return true;
 
         for (auto& particle : particles) {
-            particle.ApplyForce(Vector3{ 0, -9.8f, 0 });
+            particle.ApplyForce(Vector3{ 0, -gravity, 0 });
             particle.ApplyForce(Vector3{
                 -airResistanceFactor * particle.velocity.x * std::abs(particle.velocity.x),
                 -airResistanceFactor * particle.velocity.y * std::abs(particle.velocity.y),

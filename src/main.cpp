@@ -127,6 +127,10 @@ int main() {
 			if (IsKeyPressed(KEY_J)) {
 				if (loadedConfig.airResistanceFactor >= 0.001f) loadedConfig.airResistanceFactor -= 0.001f;
 			}
+
+			// increase or decrease gravity
+			if (IsKeyPressed(KEY_G)) { loadedConfig.gravity += 0.5f; }
+			if (IsKeyPressed(KEY_F)) { loadedConfig.gravity -= 0.5f; }
 		}
 
 		// if window moves, then stop simulation
@@ -204,30 +208,59 @@ int main() {
 		GuiLabel({ cx, cy, cw, 18 }, statusText);
 		cy += 24;
 
-		// Play / Pause Toggle
-		bool prevRunning = isRunning;
-		GuiToggle({ cx, cy, cw, ch }, isRunning ? "Pause" : "Play", &isRunning);
-		if (isRunning != prevRunning) {
-			if (isRunning) { hasStarted = true; }
-			msg = isRunning ? "Running!" : "Paused!";
-		}
-		cy += gap;
+		// draw 2 buttons based on hasStarted and isRunning states
+		if (!hasStarted) {
+			// draw an active START button and a disabled RESET button
+			auto pressedStart = GuiButton({ cx, cy, cw, ch }, "Start Simulation");
+			if (pressedStart) {
+				cloth = mesh3d::Mesh(loadedConfig); // re-create cloth to apply any config param changes
+				hasStarted = true;
+				isRunning = true;
+			}
 
-		// Restart Button
-		if (hasStarted){
-			auto pressResult = GuiButton({ cx, cy, cw, ch }, "Restart");
-			if (pressResult) {
+			cy += gap;
+
+			GuiLock();
+			auto prevState = GuiGetState();
+			GuiSetState(STATE_DISABLED);
+			auto pressedReset = GuiButton({ cx, cy, cw, ch }, "Reset Simulation");
+			if (pressedReset) {
+				// This button is locked and won't do anything
+			}
+			GuiUnlock();
+			GuiSetState(prevState);
+		} else if (hasStarted && isRunning) {
+			// ok, started and is running, show an active PAUSE button and an active RESET button
+			auto pressedPause = GuiButton({ cx, cy, cw, ch }, "Pause Simulation");
+			if (pressedPause) {
+				isRunning = false;
+			}
+
+			cy += gap;
+
+			auto pressedReset = GuiButton({ cx, cy, cw, ch }, "Reset Simulation");
+			if (pressedReset) {
 				cloth = mesh3d::Mesh(loadedConfig);
-				msg = "Reseted!";
+				msg = "Restarted!";
 				isRunning = false;
 				hasStarted = false;
 			}
-		} else {
-			// disabled restart button (drawn but not interactive)
-			int prevState = GuiGetState();
-			GuiSetState(STATE_DISABLED);
-			GuiButton({ cx, cy, cw, ch }, "Restart");
-			GuiSetState(prevState);
+		} else if (hasStarted && !isRunning) {
+			// ok, started but paused, show an active RESUME button and an active RESET button
+			auto pressedResume = GuiButton({ cx, cy, cw, ch }, "Resume Simulation");
+			if (pressedResume) {
+				isRunning = true;
+			}
+
+			cy += gap;
+
+			auto pressedReset = GuiButton({ cx, cy, cw, ch }, "Reset Simulation");
+			if (pressedReset) {
+				cloth = mesh3d::Mesh(loadedConfig);
+				msg = "Restarted!";
+				isRunning = false;
+				hasStarted = false;
+			}
 		}
 
 		cy += gap;
@@ -261,6 +294,10 @@ int main() {
 
 		// Air Resistance Slider
 		GuiSlider({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", loadedConfig.airResistanceFactor), &loadedConfig.airResistanceFactor, 0.0f, 0.1f);
+		cy += gap;
+
+		// Gravity Slider
+		GuiSlider({ cx, cy, cw, ch }, "Gravity", TextFormat("%.2f", loadedConfig.gravity), &loadedConfig.gravity, -20.0f, 20.0f);
 		cy += gap;
 
 		// Particle Mass Slider

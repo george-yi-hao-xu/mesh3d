@@ -2,13 +2,13 @@
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-        "version": "0.2.0",
-        "configurations": [
-          {
+    "version": "0.2.0",
+    "configurations": [
+        {
             "name": "Debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/Debug/${workspaceFolderBasename}.exe",
+            "program": "${workspaceFolder}/build/desktop/mesh3d.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -16,26 +16,26 @@
             "externalConsole": false,
             "MIMode": "gdb",
             "setupCommands": [
-              {
-                "description": "Enable pretty-printing for gdb",
-                "text": "-enable-pretty-printing",
-                "ignoreFailures": false
-              }
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": false
+                }
             ],
             "windows": {
-              "miDebuggerPath": "gdb.exe",
+                "miDebuggerPath": "gdb.exe"
             },
             "osx": {
-              "program": "${workspaceFolder}/bin/Debug/${workspaceFolderBasename}",
-              "MIMode": "lldb"
+                "program": "${workspaceFolder}/build/desktop/mesh3d",
+                "MIMode": "lldb"
             },
             "linux": {
-              "program": "${workspaceFolder}/bin/Debug/${workspaceFolderBasename}",
-              "miDebuggerPath": "/usr/bin/gdb",
+                "program": "${workspaceFolder}/build/desktop/mesh3d",
+                "MIMode": "lldb"
             },
-            "preLaunchTask": "build debug"
-          },
-          {
+            "preLaunchTask": "build debug (compile)"
+        },
+        {
             "name": "Run",
             "type": "cppdbg",
             "request": "launch",
@@ -44,21 +44,21 @@
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
-            "program": "${workspaceFolder}/bin/Release/${workspaceFolderBasename}.exe",
+            "program": "${workspaceFolder}/build/desktop/mesh3d.exe",
             "MIMode": "gdb",
             "windows": {
-              "program": "${workspaceFolder}/bin/Release/${workspaceFolderBasename}.exe",
-              "miDebuggerPath": "gdb.exe"
+                "program": "${workspaceFolder}/build/desktop/mesh3d.exe",
+                "miDebuggerPath": "gdb.exe"
             },
             "osx": {
-              "program": "${workspaceFolder}/bin/Release/${workspaceFolderBasename}",
-              "MIMode": "lldb"
+                "program": "${workspaceFolder}/build/desktop/mesh3d",
+                "MIMode": "lldb"
             },
             "linux": {
-              "program": "${workspaceFolder}/bin/Release/${workspaceFolderBasename}",
-              "miDebuggerPath": "/usr/bin/gdb"
+                "program": "${workspaceFolder}/build/desktop/mesh3d",
+                "MIMode": "lldb"
             },
-            "preLaunchTask": "build release",
-          }
-        ]
-      }
+            "preLaunchTask": "build release (compile)"
+        }
+    ]
+}
