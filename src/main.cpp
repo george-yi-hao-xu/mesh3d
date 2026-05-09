@@ -374,7 +374,7 @@ int main() {
 		cy += gap;
 
 		// FPS display
-		GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %.0f", GetFPS()));
+		GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %d", GetFPS()));
 
         // Text overlay in 3D area
 		DrawText(msg.c_str(), 20, 20*2, 20, BLACK);
