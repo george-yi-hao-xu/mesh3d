@@ -7,7 +7,6 @@ echo ============================================
 echo.
 echo  NOTE: Make sure emsdk is installed and activated first.
 echo  https://emscripten.org/docs/getting_started/downloads.html
-.
 echo.
 :: Verify emcc is available
 where emcc >nul 2>&1
@@ -28,6 +27,14 @@ if errorlevel 1 goto error
 echo [Build]
 cmake --build build/web
 if errorlevel 1 goto error
+
+echo [Publish]
+robocopy "build\web" "docs" /E
+set rc=%ERRORLEVEL%
+if %rc% GEQ 8 (
+    echo ERROR: Failed to copy build/web to docs (robocopy exit %rc%).
+    goto error
+)
 
 echo. > docs\.nojekyll
 
