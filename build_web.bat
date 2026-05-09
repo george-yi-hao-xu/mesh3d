@@ -7,7 +7,6 @@ echo ============================================
 echo.
 echo  NOTE: Make sure emsdk is installed and activated first.
 echo  https://emscripten.org/docs/getting_started/downloads.html
-.
 echo.
 :: Verify emcc is available
 where emcc >nul 2>&1
@@ -28,6 +27,9 @@ if errorlevel 1 goto error
 echo [Build]
 cmake --build build/web
 if errorlevel 1 goto error
+
+echo [Publish]
+echo Web build artifacts are generated directly in docs\.
 
 echo. > docs\.nojekyll
 
