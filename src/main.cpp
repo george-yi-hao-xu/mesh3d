@@ -52,7 +52,7 @@ std::string formateFloat(float f) {
 
 
 int main() {
-	mesh3d::Config currConfig = mesh3d::LoadMeshConfig("config.txt");
+	mesh3d::Config currConfig = mesh3d::LoadMeshConfig("default_config.txt");
 
 	float animationSpeed = 1.0f;
 	std::string msg = "Press r to restart simulation";
@@ -67,15 +67,15 @@ int main() {
 	bool showSaveDialog = false;
 	char saveFilename[256] = "config.txt";
 
-	char ptFileName[256] = "";
-	char configFileName[256] = "config.txt";
+	char ptFileName[256] = "example_cloud.msh";
+	char configFileName[256] = "default_config.txt";
 
 
     InitWindow(screenWidth, screenHeight, "3D Cloth Simulation");
 
     Camera camera = { { 15.0f, 15.0f, 15.0f }, { 0.0f, -2.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 60.0f, CAMERA_PERSPECTIVE };
 
-	mesh3d::Mesh cloth = mesh3d::Mesh(currConfig);
+	mesh3d::Mesh cloth = mesh3d::Mesh(currConfig, ptFileName);
 
     while (!WindowShouldClose()) {
 #ifdef __EMSCRIPTEN__
@@ -324,7 +324,7 @@ int main() {
 		cy += gap;
 
 		// Select File button: opens a dialog (Win32) or triggers HTML upload (Web)
-		if (GuiButton({ cx, cy, cw / 2, ch }, "Select Pts File")) {
+		if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Select Pts File", !hasStarted)) {
 #ifdef __EMSCRIPTEN__
 			EM_ASM({ document.getElementById('cloudFileInput').click(); });
 #elif defined(_WIN32)
@@ -378,7 +378,7 @@ int main() {
 
         // Text overlay in 3D area
 		DrawText(msg.c_str(), 20, 20*2, 20, BLACK);
-		DrawText("Keep pressing right-mouse and drag to rotate camera", 20, 20 * 4, 20, BLACK);
+		DrawText("Keep pressing right-mouse to rotate camera.", 20, 20 * 4, 20, BLACK);
 		#pragma endregion Pt_Cld
 
 		// Save Config Dialog
