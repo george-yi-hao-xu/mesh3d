@@ -318,7 +318,7 @@ int main() {
 		cy += gap;
 
 		// Select File button: opens a dialog (Win32) or triggers HTML upload (Web)
-		if (GuiButton({ cx, cy, cw, ch }, "Select File")) {
+		if (GuiButton({ cx, cy, cw / 2, ch }, "Select File")) {
 #ifdef __EMSCRIPTEN__
 			EM_ASM({ document.getElementById('cloudFileInput').click(); });
 #elif defined(_WIN32)
@@ -339,6 +339,15 @@ int main() {
 			hasStarted = false;
 #endif
 		}
+
+		if (!isRunning && !hasStarted) {
+			// regen-mesh btn
+			if (GuiButton({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Regen Mesh")) {
+				cloth = mesh3d::Mesh(loadedConfig);
+				msg = "Mesh regenerated!";
+			}
+		}
+
 		cy += gap;
 
 		// Spring generation seed
