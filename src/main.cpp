@@ -261,7 +261,8 @@ int main() {
 
 		if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Config", !hasStarted)) {
 #ifdef __EMSCRIPTEN__
-			EM_ASM({ document.getElementById('configFileInput').click(); });
+			//todo: implement the js handler for config file upload 
+			// EM_ASM({ document.getElementById('configFileInput').click(); });
 #elif defined(_WIN32)
 			if (OpenFileDialog(configFileName, sizeof(configFileName))) {
 				// open a window to pick config file
@@ -280,9 +281,6 @@ int main() {
 			showSaveDialog = true;
 		}
 		cy += gap + 8;
-
-		// Lock sliders after first play (drawn normally but not interactive)
-		if (hasStarted) GuiLock();
 
 		#pragma region Cfg_Slider
 
