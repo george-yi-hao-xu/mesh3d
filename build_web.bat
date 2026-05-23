@@ -33,6 +33,10 @@ echo Web build artifacts are generated directly in docs\.
 
 echo. > docs\.nojekyll
 
+echo [Serve]
+start "mesh3d web server" cmd /k "cd /d %CD%\docs && python -m http.server 8000"
+echo Serving docs at http://localhost:8000/
+
 echo.
 echo ============================================
 echo  BUILD SUCCESSFUL!
@@ -46,6 +50,9 @@ echo   2. git commit -m "Add web build"
 echo   3. git push
 echo   4. On GitHub: Settings ^> Pages ^> Source = Deploy from branch
 echo      Select "main" and "/docs", then Save.
+echo.
+echo Local preview:
+echo   http://localhost:8000/
 goto end
 
 :error
