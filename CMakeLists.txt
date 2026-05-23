@@ -8,18 +8,28 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Source files
 # ============================================
 set(PROJECT_SOURCES
+    src/AppActions.cpp
+    src/AppUi.cpp
+    src/CameraControls.cpp
     src/main.cpp
     src/Mesh.cpp
     src/Particle.cpp
+    src/raygui_impl.cpp
+    src/SceneDraw.cpp
     src/Spring.cpp
     src/FileDialog.cpp
 )
 
 set(PROJECT_HEADERS
+    include/AppActions.h
+    include/AppState.h
+    include/AppUi.h
+    include/CameraControls.h
     include/FileDialog.h
     include/Mesh.h
     include/Particle.h
     include/Particle.hpp
+    include/SceneDraw.h
     include/Spring.h
     include/resource_dir.h
 )
@@ -32,10 +42,10 @@ add_executable(${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS})
 target_include_directories(${PROJECT_NAME} PRIVATE
     include
     src
-    build/external
-    build/external/raylib-master/examples/shapes
-    build/external/raylib-master/src
-    build/external/raylib-master/src/external/glfw/include
+    ${CMAKE_SOURCE_DIR}/build/external
+    ${CMAKE_SOURCE_DIR}/build/external/raylib-master/examples/shapes
+    ${CMAKE_SOURCE_DIR}/build/external/raylib-master/src
+    ${CMAKE_SOURCE_DIR}/build/external/raylib-master/src/external/glfw/include
 )
 
 # ============================================

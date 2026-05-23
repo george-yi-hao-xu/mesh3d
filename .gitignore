@@ -1,11 +1,13 @@
 # Editors and local workspace state
 .vs/
-.vscode
+.vscode/
+!.vscode/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+!.vscode/c_cpp_properties.json
 *.code-workspace
 *.suo
 *.user
