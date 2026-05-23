@@ -5,6 +5,7 @@
 #include <iostream>
 #include <ctime>
 #include <cstring>
+#include <fstream>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -43,6 +44,12 @@ void SetDefaultSaveFilename(char* buffer, size_t size) {
 	strftime(buffer, size, "config_%Y%m%d_%H%M%S.txt", timeinfo);
 }
 
+void SetDefaultPointCloudFilename(char* buffer, size_t size) {
+	time_t now = time(NULL);
+	struct tm* timeinfo = localtime(&now);
+	strftime(buffer, size, "point_cloud_%Y%m%d_%H%M%S.msh", timeinfo);
+}
+
 std::string formateFloat(float f) {
 	char buffer[20];
 	std::sprintf(buffer, "%.3f", f);
@@ -65,7 +72,9 @@ int main() {
 	bool isRunning = false;
 	bool hasStarted = false;
 	bool showSaveDialog = false;
+	bool showPointCloudSaveDialog = false;
 	char saveFilename[256] = "config.txt";
+	char pointCloudSaveFilename[256] = "point_cloud.msh";
 
 	char ptFileName[256] = "example_cloud.msh";
 	char configFileName[256] = "default_config.txt";
@@ -333,7 +342,7 @@ int main() {
 		cy += gap;
 
 		// Select File button: opens a dialog (Win32) or triggers HTML upload (Web)
-		if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Select Pts File", !hasStarted)) {
+		if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Pt Cloud", !hasStarted)) {
 #ifdef __EMSCRIPTEN__
 			EM_ASM({ document.getElementById('cloudFileInput').click(); });
 #elif defined(_WIN32)
@@ -358,6 +367,15 @@ int main() {
 		if (Mesh3dBtn({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Regen Springs", !isRunning && !hasStarted)) {
 			cloth = mesh3d::Mesh(currConfig, ptFileName);
 			msg = "Mesh regenerated!";
+		}
+
+		cy += gap;
+
+		if (Mesh3dBtn({ cx, cy, cw, ch }, "Export Pt Cloud", !isRunning)) {
+			SetDefaultPointCloudFilename(pointCloudSaveFilename, sizeof(pointCloudSaveFilename));
+			showPointCloudSaveDialog = true;
+			isRunning = false;
+			msg = "Enter point cloud export filename";
 		}
 
 		cy += gap;
@@ -416,6 +434,40 @@ int main() {
 #endif
 			} else if (result >= 0) {
 				showSaveDialog = false;
+			}
+		}
+
+		if (showPointCloudSaveDialog) {
+			DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
+			Rectangle dialogRec = { (float)(screenWidth / 2 - 200), (float)(screenHeight / 2 - 100), 400, 200 };
+			int result = GuiTextInputBox(dialogRec, "Export Point Cloud", "Enter filename:", "OK;Cancel", pointCloudSaveFilename, 256, NULL);
+			if (result == 1) {
+				std::ofstream file(pointCloudSaveFilename);
+				if (file.is_open()) {
+					cloth.WritePointCloud(file);
+					file.close();
+					msg = "Point cloud saved!";
+#ifdef __EMSCRIPTEN__
+					EM_ASM({
+						var filename = UTF8ToString($0);
+						var data = FS.readFile(filename);
+						var blob = new Blob([data.buffer], {type: "text/plain"});
+						var url = URL.createObjectURL(blob);
+						var a = document.createElement("a");
+						a.href = url;
+						a.download = filename;
+						document.body.appendChild(a);
+						a.click();
+						document.body.removeChild(a);
+						URL.revokeObjectURL(url);
+					}, pointCloudSaveFilename);
+#endif
+				} else {
+					msg = "Point cloud save failed!";
+				}
+				showPointCloudSaveDialog = false;
+			} else if (result >= 0) {
+				showPointCloudSaveDialog = false;
 			}
 		}
 

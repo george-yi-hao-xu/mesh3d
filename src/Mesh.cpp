@@ -9,6 +9,7 @@
 #include <cmath>
 #include <random>
 #include <algorithm>
+#include <iomanip>
 
 const float HEIGHT = 0.0f;
 
@@ -286,5 +287,25 @@ namespace mesh3d {
         for (auto& particle : particles) {
             DrawSphere(particle.position, 0.1f, particle.isFixed ? RED : GREEN);
         }
+    }
+
+    void Mesh::WritePointCloud(std::ostream& out) const {
+        const std::ios::fmtflags oldFlags = out.flags();
+        const std::streamsize oldPrecision = out.precision();
+
+        out << "# Exported point cloud from current mesh state\n";
+        out << "# Format: x y z fixed mass\n";
+        out << std::fixed << std::setprecision(6);
+
+        for (const auto& particle : particles) {
+            out << particle.position.x << ' '
+                << particle.position.y << ' '
+                << particle.position.z << ' '
+                << (particle.isFixed ? 1 : 0) << ' '
+                << particle.mass << '\n';
+        }
+
+        out.flags(oldFlags);
+        out.precision(oldPrecision);
     }
 }

@@ -83,6 +83,7 @@ A control panel on the right side provides buttons and sliders for all actions:
 - **Restart** — reset the cloth mesh
 - **Camera: Free / Locked** — enable or disable mouse camera control
 - **Save Config** — write current settings to `config.txt`
+- **Export Pt Cloud** — save the current particle positions as `.msh` point cloud data
 - **Anim Speed** — slider to adjust animation speed (0.05 ~ 3.0)
 - **Stiffness** — slider to adjust stiffness (1.0 ~ 50.0), **disabled while simulation is running**
 - **Damping** — slider to adjust damping factor (0.0 ~ 5.0)
@@ -124,6 +125,7 @@ This means **the same seed always produces the same mesh topology** — perfect 
 
 - **File** — type the path to your point cloud file.
 - **Apply Cloud File** — load the file and rebuild the mesh.
+- **Export Pt Cloud** — save the current mesh particle state in `.msh` format.
 - **Seed** — random seed for spring generation (0 ~ 999).
 - **Max Dist** — maximum distance between particles to consider a spring (0.1 ~ 5.0).
 - **Max Conn** — maximum springs per particle (1 ~ 12).
