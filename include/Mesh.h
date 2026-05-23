@@ -3,6 +3,7 @@
 #include "Particle.h"
 #include "Spring.h"
 #include <string>
+#include <ostream>
 
 namespace mesh3d{
     struct Config {
@@ -44,5 +45,6 @@ namespace mesh3d{
         Mesh(const Config& config, const char* ptFileName = nullptr);
         bool Update(float dt);
         void Draw();
+        void WritePointCloud(std::ostream& out) const;
     };
 } // namespace mesh3d
