@@ -33,6 +33,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     include
     src
     build/external
+    build/external/raylib-master/examples/shapes
     build/external/raylib-master/src
     build/external/raylib-master/src/external/glfw/include
 )
