@@ -141,6 +141,15 @@ This means **the same seed always produces the same mesh topology** — perfect 
 | `maxSpringsPerParticle` | `4` | Max springs attached to one particle. |
 | `springConnectProb` | `0.8` | Probability of connecting a candidate pair. |
 
+### Rhino3D Scripts
+
+The `fromToRhino` folder contains two Rhino Python scripts:
+
+- `fromRhino.py` — select unfixed points, then fixed points, then save a `.msh` point cloud.
+- `toRhino.py` — open a `.msh` point cloud and create Rhino point objects on separate fixed/unfixed layers.
+
+Rhino is usually Z-up, while mesh3d is Y-up. The scripts map axes by default so the point cloud keeps the same visual orientation between Rhino and mesh3d.
+
 ## Download exe file
 
 [Download](./download/Mesh3D.exe)

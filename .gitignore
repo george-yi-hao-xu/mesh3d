@@ -61,6 +61,7 @@ Makefile
 *.svclog
 *.scc
 ipch/
+__pycache__/
 
 # Build/package directories from common generators
 [Dd]ebug/
