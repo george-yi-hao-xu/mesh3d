@@ -98,19 +98,20 @@ export async function checkHealth() {
 }
 
 /**
- * Uploads a point-cloud file before creating a solver job.
+ * Uploads a mesh artifact before creating a solver job.
  *
- * @param {File | undefined} file
+ * @param {File | Blob | undefined} file
+ * @param {string} [fileName]
  * @returns {Promise<Upload>}
  * @throws {Error} When no file has been selected.
  */
-export async function uploadPointCloud(file) {
+export async function uploadMeshArtifact(file, fileName = "") {
   if (!file) {
     throw new Error("Choose a point cloud file first.");
   }
 
   const body = new FormData();
-  body.append("pointCloud", file);
+  body.append("pointCloud", file, fileName || file.name || "mesh.mesh");
 
   const res = await fetch("/api/uploads", {
     method: "POST",

@@ -29,12 +29,20 @@ import { state } from "./state.js";
  *   jobName: HTMLInputElement,
  *   stiffness: HTMLInputElement,
  *   damping: HTMLInputElement,
+ *   gravity: HTMLInputElement,
+ *   airResistanceFactor: HTMLInputElement,
+ *   timeStep: HTMLInputElement,
  *   snapshotInterval: HTMLInputElement,
  *   maxSimTime: HTMLInputElement,
+ *   maxSteps: HTMLInputElement,
+ *   velocityEpsilon: HTMLInputElement,
+ *   positionEpsilon: HTMLInputElement,
+ *   stableFrames: HTMLInputElement,
  *   springSeed: HTMLInputElement,
  *   maxSpringDist: HTMLInputElement,
  *   maxSpringsPerParticle: HTMLInputElement,
  *   springConnectProb: HTMLInputElement,
+ *   springPreviewStatus: HTMLElement,
  *   jobList: HTMLElement,
  *   activeJobTitle: HTMLElement,
  *   activeJobMeta: HTMLElement,
@@ -73,12 +81,20 @@ const els = {
   jobName: document.querySelector("#jobName"),
   stiffness: document.querySelector("#stiffness"),
   damping: document.querySelector("#damping"),
+  gravity: document.querySelector("#gravity"),
+  airResistanceFactor: document.querySelector("#airResistanceFactor"),
+  timeStep: document.querySelector("#timeStep"),
   snapshotInterval: document.querySelector("#snapshotInterval"),
   maxSimTime: document.querySelector("#maxSimTime"),
+  maxSteps: document.querySelector("#maxSteps"),
+  velocityEpsilon: document.querySelector("#velocityEpsilon"),
+  positionEpsilon: document.querySelector("#positionEpsilon"),
+  stableFrames: document.querySelector("#stableFrames"),
   springSeed: document.querySelector("#springSeed"),
   maxSpringDist: document.querySelector("#maxSpringDist"),
   maxSpringsPerParticle: document.querySelector("#maxSpringsPerParticle"),
   springConnectProb: document.querySelector("#springConnectProb"),
+  springPreviewStatus: document.querySelector("#springPreviewStatus"),
   jobList: document.querySelector("#jobList"),
   activeJobTitle: document.querySelector("#activeJobTitle"),
   activeJobMeta: document.querySelector("#activeJobMeta"),
@@ -167,7 +183,12 @@ els.file.addEventListener("change", () => {
     els.jobName.value = getDefaultJobName();
     state.jobNameEdited = false;
   }
+  jobs.previewInput();
 });
+
+for (const input of [els.stiffness, els.springSeed, els.maxSpringDist, els.maxSpringsPerParticle, els.springConnectProb]) {
+  input.addEventListener("input", () => jobs.previewInput());
+}
 
 els.jobName.addEventListener("input", () => {
   state.jobNameEdited = true;

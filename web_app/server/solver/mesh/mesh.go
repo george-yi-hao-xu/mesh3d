@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"math"
-	mathrand "math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -20,36 +19,33 @@ type MeshModel struct {
 }
 
 type Config struct {
-	Stiffness             float64
-	ParticleMass          float64
-	DampingFactor         float64
-	AirResistanceFactor   float64
-	Gravity               float64
-	SpringSeed            int64
-	MaxSpringDist         float64
-	MaxSpringsPerParticle int
-	SpringConnectProb     float64
+	Stiffness           float64
+	DampingFactor       float64
+	AirResistanceFactor float64
+	Gravity             float64
 }
 
-// NewMeshModelFromPointCloud loads particles and generates spring topology.
-func NewMeshModelFromPointCloud(path string, cfg Config) (*MeshModel, error) {
-	particles, err := loadPointCloud(path, cfg.ParticleMass)
+// NewMeshModelFromMeshFile loads particles and explicit spring topology from a mesh-v1 file.
+func NewMeshModelFromMeshFile(path string, cfg Config) (*MeshModel, error) {
+	particles, springs, err := loadMeshV1(path, cfg.Stiffness)
 	if err != nil {
 		return nil, err
 	}
 	if len(particles) == 0 {
-		return nil, fmt.Errorf("point cloud contains no valid particles")
+		return nil, fmt.Errorf("mesh contains no valid particles")
+	}
+	if len(springs) == 0 {
+		return nil, fmt.Errorf("mesh contains no valid springs")
 	}
 
-	mesh := &MeshModel{
+	return &MeshModel{
 		Particles:       particles,
+		Springs:         springs,
 		SpringStiffness: cfg.Stiffness,
 		DampingFactor:   cfg.DampingFactor,
 		AirResistance:   cfg.AirResistanceFactor,
 		Gravity:         cfg.Gravity,
-	}
-	mesh.GenerateRandomSprings(cfg.SpringSeed, cfg.MaxSpringDist, cfg.MaxSpringsPerParticle, cfg.SpringConnectProb)
-	return mesh, nil
+	}, nil
 }
 
 // Update performs one simulation step and reports whether particle positions stayed valid.
@@ -83,85 +79,6 @@ func (m *MeshModel) Update(dt float64) bool {
 		}
 	}
 	return true
-}
-
-// GenerateRandomSprings connects nearby particles using a deterministic seeded shuffle.
-func (m *MeshModel) GenerateRandomSprings(seed int64, maxDist float64, maxPerParticle int, prob float64) {
-	if len(m.Particles) < 2 || maxDist <= 0 || maxPerParticle <= 0 || prob <= 0 {
-		return
-	}
-	if prob > 1 {
-		prob = 1
-	}
-
-	type candidate struct {
-		Index int
-		Dist  float64
-	}
-
-	n := len(m.Particles)
-	candidates := make([][]candidate, n)
-	connectionCount := make([]int, n)
-
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			dist := m.Particles[i].Position.Sub(m.Particles[j].Position).Length()
-			if dist <= maxDist && dist > 0.0001 {
-				candidates[i] = append(candidates[i], candidate{Index: j, Dist: dist})
-			}
-		}
-	}
-
-	for i := 0; i < n; i++ {
-		rng := mathrand.New(mathrand.NewSource(seed + int64(i)))
-		rng.Shuffle(len(candidates[i]), func(a, b int) {
-			candidates[i][a], candidates[i][b] = candidates[i][b], candidates[i][a]
-		})
-	}
-
-	probRng := mathrand.New(mathrand.NewSource(seed))
-	for i := 0; i < n; i++ {
-		for _, cand := range candidates[i] {
-			j := cand.Index
-			if connectionCount[i] >= maxPerParticle || connectionCount[j] >= maxPerParticle {
-				continue
-			}
-			if probRng.Float64() <= prob {
-				m.Springs = append(m.Springs, NewSpringEdge(&m.Particles[i], &m.Particles[j], m.SpringStiffness))
-				connectionCount[i]++
-				connectionCount[j]++
-			}
-		}
-	}
-}
-
-// WritePointCloud writes current particle positions in the .msh point-cloud format.
-func (m *MeshModel) WritePointCloud(path string, simTime float64, step int, final bool) error {
-	out, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	kind := "checkpoint"
-	if final {
-		kind = "final"
-	}
-	fmt.Fprintf(out, "# Mesh3D Go solver %s point cloud\n", kind)
-	fmt.Fprintf(out, "# Simulated time: %.6fs\n", simTime)
-	fmt.Fprintf(out, "# Step: %d\n", step)
-	fmt.Fprintf(out, "# Particles: %d\n", len(m.Particles))
-	fmt.Fprintf(out, "# Springs: %d\n", len(m.Springs))
-	fmt.Fprintf(out, "# Format: x y z fixed mass\n")
-
-	for _, p := range m.Particles {
-		fixed := 0
-		if p.Fixed {
-			fixed = 1
-		}
-		fmt.Fprintf(out, "%.6f %.6f %.6f %d %.6f\n", p.Position.X, p.Position.Y, p.Position.Z, fixed, p.Mass)
-	}
-	return nil
 }
 
 // WriteMeshSnapshot writes particle positions and spring topology in the mesh-v1 format.
@@ -214,70 +131,134 @@ func (m *MeshModel) WriteMeshSnapshot(path string, simTime float64, step int, fi
 	return nil
 }
 
-// loadPointCloud parses a .msh point-cloud file into solver particles.
-func loadPointCloud(path string, defaultMass float64) ([]ParticleNode, error) {
+func loadMeshV1(path string, defaultStiffness float64) ([]ParticleNode, []SpringEdge, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer file.Close()
 
 	var particles []ParticleNode
+	var edgeRows []struct {
+		a          int
+		b          int
+		restLength float64
+		stiffness  float64
+		lineNumber int
+	}
+	section := ""
+	hasMeshFormat := false
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++
 		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			if strings.EqualFold(strings.TrimSpace(strings.TrimPrefix(line, "# Format:")), "mesh-v1") {
+				hasMeshFormat = true
+			}
+			continue
+		}
+
+		lower := strings.ToLower(line)
+		if lower == "vertices" || lower == "edges" {
+			section = lower
 			continue
 		}
 
 		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			return nil, fmt.Errorf("invalid point cloud line %d: expected at least x y z", lineNumber)
-		}
-
-		x, err := strconv.ParseFloat(fields[0], 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid x value on line %d", lineNumber)
-		}
-		y, err := strconv.ParseFloat(fields[1], 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid y value on line %d", lineNumber)
-		}
-		z, err := strconv.ParseFloat(fields[2], 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid z value on line %d", lineNumber)
-		}
-
-		fixed := false
-		if len(fields) >= 4 {
-			fixedInt, err := strconv.Atoi(fields[3])
-			if err != nil {
-				return nil, fmt.Errorf("invalid fixed flag on line %d", lineNumber)
+		switch section {
+		case "vertices":
+			if len(fields) < 6 {
+				return nil, nil, fmt.Errorf("invalid mesh vertex line %d: expected index x y z fixed mass", lineNumber)
 			}
-			fixed = fixedInt != 0
-		}
-
-		mass := defaultMass
-		if len(fields) >= 5 {
-			mass, err = strconv.ParseFloat(fields[4], 64)
-			if err != nil {
-				return nil, fmt.Errorf("invalid mass on line %d", lineNumber)
+			index, err := strconv.Atoi(fields[0])
+			if err != nil || index != len(particles) {
+				return nil, nil, fmt.Errorf("invalid mesh vertex index on line %d", lineNumber)
 			}
+			x, err := strconv.ParseFloat(fields[1], 64)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid vertex x on line %d", lineNumber)
+			}
+			y, err := strconv.ParseFloat(fields[2], 64)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid vertex y on line %d", lineNumber)
+			}
+			z, err := strconv.ParseFloat(fields[3], 64)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid vertex z on line %d", lineNumber)
+			}
+			fixedInt, err := strconv.Atoi(fields[4])
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid fixed flag on line %d", lineNumber)
+			}
+			mass, err := strconv.ParseFloat(fields[5], 64)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid mass on line %d", lineNumber)
+			}
+			if mass <= 0 {
+				return nil, nil, fmt.Errorf("mass must be positive on line %d", lineNumber)
+			}
+			particles = append(particles, ParticleNode{
+				Position: Vec3{X: x, Y: y, Z: z},
+				Mass:     mass,
+				Fixed:    fixedInt != 0,
+			})
+		case "edges":
+			if len(fields) < 4 {
+				return nil, nil, fmt.Errorf("invalid mesh edge line %d: expected a_index b_index rest_length stiffness", lineNumber)
+			}
+			a, err := strconv.Atoi(fields[0])
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid edge start index on line %d", lineNumber)
+			}
+			b, err := strconv.Atoi(fields[1])
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid edge end index on line %d", lineNumber)
+			}
+			restLength, err := strconv.ParseFloat(fields[2], 64)
+			if err != nil || restLength <= 0 {
+				return nil, nil, fmt.Errorf("invalid edge rest length on line %d", lineNumber)
+			}
+			stiffness, err := strconv.ParseFloat(fields[3], 64)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid edge stiffness on line %d", lineNumber)
+			}
+			if stiffness <= 0 {
+				stiffness = defaultStiffness
+			}
+			edgeRows = append(edgeRows, struct {
+				a          int
+				b          int
+				restLength float64
+				stiffness  float64
+				lineNumber int
+			}{a: a, b: b, restLength: restLength, stiffness: stiffness, lineNumber: lineNumber})
+		default:
+			return nil, nil, fmt.Errorf("mesh line %d appears before vertices or edges section", lineNumber)
 		}
-		if mass <= 0 {
-			return nil, fmt.Errorf("mass must be positive on line %d", lineNumber)
-		}
-
-		particles = append(particles, ParticleNode{
-			Position: Vec3{X: x, Y: y, Z: z},
-			Mass:     mass,
-			Fixed:    fixed,
-		})
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return particles, nil
+	if !hasMeshFormat {
+		return nil, nil, fmt.Errorf("mesh input must declare # Format: mesh-v1")
+	}
+
+	springs := make([]SpringEdge, 0, len(edgeRows))
+	for _, edge := range edgeRows {
+		if edge.a < 0 || edge.a >= len(particles) || edge.b < 0 || edge.b >= len(particles) || edge.a == edge.b {
+			return nil, nil, fmt.Errorf("edge references invalid vertex on line %d", edge.lineNumber)
+		}
+		springs = append(springs, SpringEdge{
+			A:          &particles[edge.a],
+			B:          &particles[edge.b],
+			RestLength: edge.restLength,
+			Stiffness:  edge.stiffness,
+		})
+	}
+	return particles, springs, nil
 }

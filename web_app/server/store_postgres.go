@@ -113,7 +113,7 @@ func (s *Store) getUserPostgres(id string) (*User, bool) {
 }
 
 func (s *Store) saveUploadPostgres(upload Upload) error {
-	objectKey := filepath.ToSlash(filepath.Join("uploads", upload.ID+".msh"))
+	objectKey := filepath.ToSlash(filepath.Join("uploads", upload.ID+".mesh"))
 	_, err := s.db.Exec(
 		`insert into uploads (id, user_id, file_name, size_bytes, object_key, created_at) values ($1, $2, $3, $4, $5, $6)`,
 		upload.ID, upload.UserID, upload.FileName, upload.Size, objectKey, upload.CreatedAt,
@@ -140,7 +140,7 @@ func (s *Store) insertJobPostgres(job *Job) error {
 	if err != nil {
 		return err
 	}
-	inputObjectKey := filepath.ToSlash(filepath.Join("jobs", job.ID, "input.msh"))
+	inputObjectKey := filepath.ToSlash(filepath.Join("jobs", job.ID, "input.mesh"))
 	_, err = s.db.Exec(
 		`insert into jobs (
 			id, user_id, upload_id, name, input_name, input_object_key, config, status,

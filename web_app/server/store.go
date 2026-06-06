@@ -23,7 +23,7 @@ var (
 )
 
 func (s *Store) uploadMeshPath(uploadID string) string {
-	return filepath.Join(s.storageDir, "uploads", uploadID+".msh")
+	return filepath.Join(s.storageDir, "uploads", uploadID+".mesh")
 }
 
 func (s *Store) jobDir(jobID string) string {
@@ -31,7 +31,7 @@ func (s *Store) jobDir(jobID string) string {
 }
 
 func (s *Store) jobInputPath(jobID string) string {
-	return filepath.Join(s.jobDir(jobID), "input.msh")
+	return filepath.Join(s.jobDir(jobID), "input.mesh")
 }
 
 func (s *Store) jobSnapshotDir(jobID string) string {
@@ -84,7 +84,7 @@ func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart
 	id := newID("upl")
 	fileName := filepath.Base(header.Filename)
 	if fileName == "." || fileName == string(filepath.Separator) || fileName == "" {
-		fileName = "point_cloud.msh"
+		fileName = "mesh.mesh"
 	}
 
 	path := s.uploadMeshPath(id)

@@ -143,6 +143,13 @@ input {
   gap: 12px;
 }
 
+.spring-status {
+  min-height: 18px;
+  color: #344252;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 button,
 .download {
   border: 0;

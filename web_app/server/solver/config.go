@@ -7,14 +7,9 @@ import (
 
 type SolverConfig struct {
 	Stiffness             float64
-	ParticleMass          float64
 	DampingFactor         float64
 	AirResistanceFactor   float64
 	Gravity               float64
-	SpringSeed            int64
-	MaxSpringDist         float64
-	MaxSpringsPerParticle int
-	SpringConnectProb     float64
 	TimeStep              float64
 	SnapshotInterval      float64
 	MaxSimTime            float64
@@ -35,14 +30,9 @@ type SolverResult struct {
 func LoadSolverConfig(raw map[string]interface{}) SolverConfig {
 	return SolverConfig{
 		Stiffness:             configFloat(raw, "stiffness", 10.0),
-		ParticleMass:          configFloat(raw, "particleMass", 1.0),
 		DampingFactor:         configFloat(raw, "dampingFactor", configFloat(raw, "damping", 0.1)),
 		AirResistanceFactor:   configFloat(raw, "airResistanceFactor", 0.001),
 		Gravity:               configFloat(raw, "gravity", 9.8),
-		SpringSeed:            int64(configInt(raw, "springSeed", 42)),
-		MaxSpringDist:         configFloat(raw, "maxSpringDist", 1.5),
-		MaxSpringsPerParticle: configInt(raw, "maxSpringsPerParticle", 4),
-		SpringConnectProb:     configFloat(raw, "springConnectProb", 0.8),
 		TimeStep:              configFloat(raw, "timeStep", 1.0/60.0),
 		SnapshotInterval:      configFloat(raw, "snapshotInterval", 0.05),
 		MaxSimTime:            configFloat(raw, "maxSimTime", 120.0),

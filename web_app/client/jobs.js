@@ -4,9 +4,11 @@ import {
   fetchJob,
   fetchMeshData,
   listJobs,
-  uploadPointCloud,
+  uploadMeshArtifact,
 } from "./api.js";
 import { escapeHTML, formatDate, formatSeconds, jobTitle } from "./format.js";
+import { parseMeshData } from "./mesh-parser.js";
+import { generateSprings, serializeMeshV1 } from "./mesh-topology.js";
 import { renderPointCloud, setMeshMessage } from "./mesh-viewer.js";
 
 /**
@@ -15,12 +17,20 @@ import { renderPointCloud, setMeshMessage } from "./mesh-viewer.js";
  *   jobName: HTMLInputElement,
  *   stiffness: HTMLInputElement,
  *   damping: HTMLInputElement,
+ *   gravity: HTMLInputElement,
+ *   airResistanceFactor: HTMLInputElement,
+ *   timeStep: HTMLInputElement,
  *   snapshotInterval: HTMLInputElement,
  *   maxSimTime: HTMLInputElement,
+ *   maxSteps: HTMLInputElement,
+ *   velocityEpsilon: HTMLInputElement,
+ *   positionEpsilon: HTMLInputElement,
+ *   stableFrames: HTMLInputElement,
  *   springSeed: HTMLInputElement,
  *   maxSpringDist: HTMLInputElement,
  *   maxSpringsPerParticle: HTMLInputElement,
  *   springConnectProb: HTMLInputElement,
+ *   springPreviewStatus: HTMLElement,
  *   jobList: HTMLElement,
  *   activeJobTitle: HTMLElement,
  *   activeJobMeta: HTMLElement,
@@ -33,7 +43,7 @@ import { renderPointCloud, setMeshMessage } from "./mesh-viewer.js";
  *   meshCanvasMessage: HTMLElement
  * }} JobElements
  *
- * @typedef {{ refreshJobs: () => Promise<void>, submitJob: () => Promise<void>, deleteActiveJob: (jobId?: string | null) => Promise<void> }} JobController
+ * @typedef {{ refreshJobs: () => Promise<void>, previewInput: () => Promise<void>, submitJob: () => Promise<void>, deleteActiveJob: (jobId?: string | null) => Promise<void> }} JobController
  */
 
 /**
@@ -48,6 +58,8 @@ export function createJobController(state, els, options) {
   const { onAuthError = () => false } = options;
   let playbackTimer = null;
   let playbackControls = null;
+  let previewRequestId = 0;
+  let preparedMesh = null;
 
   /**
    * Loads the current user's jobs and seeds the metadata cache.
@@ -64,12 +76,16 @@ export function createJobController(state, els, options) {
   }
 
   /**
-   * Uploads the selected point cloud, submits a synchronous solver job, and displays bundled frames.
+   * Uploads the generated mesh topology, submits a synchronous solver job, and displays bundled frames.
    *
    * @returns {Promise<void>}
    */
   async function submitJob() {
-    const upload = await uploadPointCloud(els.file.files[0]);
+    const preview = await prepareMeshPreview();
+    const upload = await uploadMeshArtifact(
+      new Blob([preview.text], { type: "text/plain" }),
+      generatedMeshFileName(els.file.files[0]?.name),
+    );
     const response = await createJob(upload.id, els.jobName.value.trim(), getConfig());
     const job = response.job;
     state.activeJobId = job.id;
@@ -80,6 +96,25 @@ export function createJobController(state, els, options) {
     state.jobs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     renderJobs();
     renderActiveJob(job, { autoSelectFrame: true });
+  }
+
+  /**
+   * Generates and renders spring topology for the selected point cloud.
+   *
+   * @returns {Promise<void>}
+   */
+  async function previewInput() {
+    const requestId = ++previewRequestId;
+    try {
+      const preview = await prepareMeshPreview();
+      if (requestId !== previewRequestId) return;
+      await showPreparedMeshPreview(preview);
+    } catch (error) {
+      if (requestId !== previewRequestId) return;
+      preparedMesh = null;
+      setSpringStatus(error.message);
+      setMeshMessage(els, error.message);
+    }
   }
 
   /**
@@ -334,8 +369,15 @@ export function createJobController(state, els, options) {
     return {
       stiffness: Number(els.stiffness.value),
       dampingFactor: Number(els.damping.value),
+      gravity: Number(els.gravity.value),
+      airResistanceFactor: Number(els.airResistanceFactor.value),
+      timeStep: Number(els.timeStep.value),
       snapshotInterval: Number(els.snapshotInterval.value),
       maxSimTime: Number(els.maxSimTime.value),
+      maxSteps: Number(els.maxSteps.value),
+      velocityEpsilon: Number(els.velocityEpsilon.value),
+      positionEpsilon: Number(els.positionEpsilon.value),
+      stableFrames: Number(els.stableFrames.value),
       springSeed: Number(els.springSeed.value),
       maxSpringDist: Number(els.maxSpringDist.value),
       maxSpringsPerParticle: Number(els.maxSpringsPerParticle.value),
@@ -419,6 +461,81 @@ export function createJobController(state, els, options) {
     els.download.removeAttribute("href");
     els.preview.textContent = "No job selected.";
     setMeshMessage(els, "No job selected.");
+  }
+
+  /**
+   * Reads the selected file and generates a mesh-v1 topology from current spring controls.
+   *
+   * @returns {Promise<{ mesh: import("./mesh-parser.js").MeshData, text: string, sourceName: string }>}
+   */
+  async function prepareMeshPreview() {
+    const file = els.file.files[0];
+    if (!file) {
+      throw new Error("Choose a point cloud to preview springs.");
+    }
+
+    const sourceText = await file.text();
+    const parsed = parseMeshData(sourceText);
+    const config = getConfig();
+    const edges = generateSprings(parsed.points, config);
+    if (edges.length === 0) {
+      throw new Error("No springs generated. Increase max distance, max springs, or connect probability.");
+    }
+
+    const mesh = {
+      points: parsed.points,
+      edges,
+      metadata: {
+        source: file.name,
+        springs: String(edges.length),
+      },
+    };
+    const text = serializeMeshV1(mesh);
+    preparedMesh = { mesh, text, sourceName: file.name };
+    return preparedMesh;
+  }
+
+  /**
+   * Renders the generated topology before the solve is submitted.
+   *
+   * @param {{ mesh: import("./mesh-parser.js").MeshData, text: string, sourceName: string }} preview
+   * @returns {void}
+   */
+  async function showPreparedMeshPreview(preview) {
+    stopPlayback();
+    state.activeJobId = null;
+    state.activeFrameUrl = null;
+    state.activeFrames = [];
+    els.activeJobTitle.textContent = "Spring preview";
+    els.activeJobMeta.textContent = `${preview.mesh.points.length} points - ${preview.mesh.edges.length} springs`;
+    els.activeInputName.textContent = `Input file: ${preview.sourceName}`;
+    els.activeInputName.classList.remove("hidden");
+    els.deleteJob.classList.add("hidden");
+    els.tabs.innerHTML = "";
+    els.tabs.classList.remove("frame-control");
+    els.download.classList.add("hidden");
+    els.download.removeAttribute("href");
+    els.preview.textContent = preview.text;
+    setSpringStatus(`${preview.mesh.edges.length} springs generated from ${preview.mesh.points.length} points.`);
+    await renderPointCloud(state, els, preview.mesh, { jobId: "spring-preview", frames: [] });
+  }
+
+  /**
+   * @param {string} message
+   * @returns {void}
+   */
+  function setSpringStatus(message) {
+    if (els.springPreviewStatus) {
+      els.springPreviewStatus.textContent = message;
+    }
+  }
+
+  /**
+   * @param {string | undefined} fileName
+   * @returns {string}
+   */
+  function generatedMeshFileName(fileName) {
+    return `${sanitizeDownloadStem(fileName || "mesh")}_springs.mesh`;
   }
 
   function canDeleteJob(job) {
@@ -649,6 +766,7 @@ export function createJobController(state, els, options) {
 
   return {
     refreshJobs,
+    previewInput,
     submitJob,
     deleteActiveJob,
   };

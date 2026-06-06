@@ -7,7 +7,7 @@ This folder contains the server-backed web workflow for Mesh3D.
 - Frontend: vanilla HTML/CSS/JS
 - Backend: Go `net/http`
 - Database: Postgres metadata
-- Storage: local filesystem `.msh` uploads and `.mesh` solver artifacts
+- Storage: local filesystem `.mesh` uploads and solver artifacts
 - Solver: Go mass-spring solver ported from the C++ logic
 
 ## Local Run
@@ -30,7 +30,7 @@ go mod tidy
 go run .
 ```
 
-On startup, the server applies `server/schema/postgres.sql`. `MESH3D_DATABASE_URL` is required. Uploaded `.msh` point clouds and generated `.mesh` solver artifacts remain on the local filesystem.
+On startup, the server applies `server/schema/postgres.sql`. `MESH3D_DATABASE_URL` is required. Browser-generated `.mesh` uploads and generated `.mesh` solver artifacts remain on the local filesystem.
 
 To inspect Postgres from the terminal, open `psql` inside the running container:
 
@@ -56,7 +56,7 @@ Open:
 http://localhost:8080
 ```
 
-The server stores uploaded point clouds, checkpoint `.mesh` files, and final `.mesh` files under:
+The server stores uploaded mesh topology files, checkpoint `.mesh` files, and final `.mesh` files under:
 
 ```text
 web_app/server/storage/
@@ -116,20 +116,20 @@ styles.css
 
 This is why `main.go` has `clientDir`: the backend currently serves the frontend too.
 
-### 2. Browser Uploads a Point Cloud
+### 2. Browser Previews and Uploads Mesh Topology
 
 ```text
 POST /api/uploads
 ```
 
-The server calls `handleUploads`.
+The browser parses the selected point cloud, generates deterministic spring edges from the current spring controls, previews the points plus springs, then uploads a generated `mesh-v1` artifact. The server calls `handleUploads`.
 
 It:
 
 ```text
 reads multipart file field "pointCloud"
 calls store.SaveUpload(...)
-writes storage/uploads/{uploadId}.msh
+writes storage/uploads/{uploadId}.mesh
 records upload metadata in Postgres
 returns upload JSON to the browser
 ```
@@ -148,9 +148,9 @@ It:
 reads JSON body: uploadId + config
 calls store.CreateJob(...)
 creates storage/jobs/{jobId}/
-copies input.msh into the job folder
+copies input.mesh into the job folder
 records job metadata and config in Postgres
-runs the solver
+runs the solver from explicit mesh topology
 reads checkpoint and final mesh files
 returns job JSON plus frame mesh text
 ```
@@ -162,7 +162,7 @@ The job handler calls `RunGoSolver` in `server/job_runner.go`.
 It:
 
 ```text
-loads storage/jobs/{jobId}/input.msh
+loads storage/jobs/{jobId}/input.mesh
 loads solver settings from the Postgres-backed job config
 creates the solver mesh
 runs physics
@@ -233,7 +233,7 @@ solver creates checkpoints
 
 ## Solver Notes
 
-The Go solver loads uploaded `.msh` point clouds, generates random springs using the same seeded distance/probability strategy as the C++ app, then runs the mass-spring update loop until convergence or a configured limit.
+The browser turns uploaded point clouds into explicit `mesh-v1` vertices and springs before submitting a solve. The Go solver loads that explicit topology, then runs the mass-spring update loop until convergence or a configured limit.
 
 Solver orchestration code lives in:
 
@@ -261,23 +261,29 @@ and max per-step movement < positionEpsilon
 for stableFrames consecutive frames
 ```
 
-Important job config fields:
+Important server solver config fields:
 
 ```text
 stiffness
 dampingFactor
 airResistanceFactor
 gravity
+timeStep
+snapshotInterval
+maxSimTime
+maxSteps
+velocityEpsilon
+positionEpsilon
+stableFrames
+```
+
+Browser topology config fields are also saved with the job for reproducibility:
+
+```text
 springSeed
 maxSpringDist
 maxSpringsPerParticle
 springConnectProb
-timeStep
-snapshotInterval
-maxSimTime
-velocityEpsilon
-positionEpsilon
-stableFrames
 ```
 
 ## Google Cloud Direction

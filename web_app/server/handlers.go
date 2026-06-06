@@ -284,7 +284,7 @@ func (a *App) serveJobResultFile(w http.ResponseWriter, r *http.Request, userID,
 		serveFile(w, r, a.store.jobResultPath(jobID))
 		return
 	}
-	serveFile(w, r, a.store.jobArtifactPath(jobID, "final.msh"))
+	writeError(w, http.StatusNotFound, "file not found")
 }
 
 // serveJobFile serves generated job artifacts from the job storage directory.

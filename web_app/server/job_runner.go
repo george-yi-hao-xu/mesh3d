@@ -17,7 +17,7 @@ func RunGoSolver(store *Store, jobID string) (*Job, error) {
 	}
 
 	cfg := solver.LoadSolverConfig(job.Config)
-	model, err := solver.NewMeshModelFromPointCloud(store.jobInputPath(jobID), cfg)
+	model, err := solver.NewMeshModelFromMeshFile(store.jobInputPath(jobID), cfg)
 	if err != nil {
 		store.SetJobStatus(jobID, "failed", err.Error())
 		return getJobAfterRun(store, jobID), err

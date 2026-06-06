@@ -7,9 +7,9 @@ import (
 	"mesh3d/web_app/server/solver/mesh"
 )
 
-// NewMeshModelFromPointCloud adapts solver config to the mesh package constructor.
-func NewMeshModelFromPointCloud(path string, cfg SolverConfig) (*mesh.MeshModel, error) {
-	return mesh.NewMeshModelFromPointCloud(path, meshConfig(cfg))
+// NewMeshModelFromMeshFile adapts solver config to an explicit mesh topology file.
+func NewMeshModelFromMeshFile(path string, cfg SolverConfig) (*mesh.MeshModel, error) {
+	return mesh.NewMeshModelFromMeshFile(path, meshConfig(cfg))
 }
 
 // RunMesh advances a mesh until convergence or configured limits and emits checkpoints.
@@ -65,14 +65,9 @@ func RunMesh(model *mesh.MeshModel, cfg SolverConfig, onSnapshot func(simTime fl
 // meshConfig copies the mesh-owned subset of solver settings.
 func meshConfig(cfg SolverConfig) mesh.Config {
 	return mesh.Config{
-		Stiffness:             cfg.Stiffness,
-		ParticleMass:          cfg.ParticleMass,
-		DampingFactor:         cfg.DampingFactor,
-		AirResistanceFactor:   cfg.AirResistanceFactor,
-		Gravity:               cfg.Gravity,
-		SpringSeed:            cfg.SpringSeed,
-		MaxSpringDist:         cfg.MaxSpringDist,
-		MaxSpringsPerParticle: cfg.MaxSpringsPerParticle,
-		SpringConnectProb:     cfg.SpringConnectProb,
+		Stiffness:           cfg.Stiffness,
+		DampingFactor:       cfg.DampingFactor,
+		AirResistanceFactor: cfg.AirResistanceFactor,
+		Gravity:             cfg.Gravity,
 	}
 }

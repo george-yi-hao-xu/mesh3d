@@ -70,12 +70,40 @@
               <input id="damping" type="number" value="0.1" min="0" step="0.01" />
             </label>
             <label>
+              Gravity
+              <input id="gravity" type="number" value="-4.9" step="0.1" />
+            </label>
+            <label>
+              Air resistance
+              <input id="airResistanceFactor" type="number" value="0.001" min="0" step="0.001" />
+            </label>
+            <label>
+              Time step
+              <input id="timeStep" type="number" value="0.01" min="0.0001" step="0.0001" />
+            </label>
+            <label>
               Snapshot interval
               <input id="snapshotInterval" type="number" value="0.05" min="0.05" step="0.05" />
             </label>
             <label>
               Max sim time
               <input id="maxSimTime" type="number" value="120" min="1" step="1" />
+            </label>
+            <label>
+              Max steps
+              <input id="maxSteps" type="number" value="20000" min="1" step="1" />
+            </label>
+            <label>
+              Velocity epsilon
+              <input id="velocityEpsilon" type="number" value="0.001" min="0" step="0.0001" />
+            </label>
+            <label>
+              Position epsilon
+              <input id="positionEpsilon" type="number" value="0.001" min="0" step="0.0001" />
+            </label>
+            <label>
+              Stable frames
+              <input id="stableFrames" type="number" value="60" min="1" step="1" />
             </label>
             <label>
               Spring seed
@@ -95,6 +123,7 @@
             </label>
           </div>
 
+          <p id="springPreviewStatus" class="spring-status">Choose a point cloud to preview springs.</p>
           <button type="submit">Run Solve</button>
         </form>
 

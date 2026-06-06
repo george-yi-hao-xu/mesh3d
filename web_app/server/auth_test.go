@@ -243,19 +243,27 @@ func resetTestDB(t *testing.T, store *Store) {
 func saveTestUpload(t *testing.T, store *Store, userID string) Upload {
 	t.Helper()
 
-	file, err := os.CreateTemp(t.TempDir(), "input-*.msh")
+	file, err := os.CreateTemp(t.TempDir(), "input-*.mesh")
 	if err != nil {
 		t.Fatalf("create temp upload: %v", err)
 	}
 	defer file.Close()
-	if _, err := file.WriteString("point cloud"); err != nil {
+	if _, err := file.WriteString(`# Format: mesh-v1
+
+vertices
+0 0 0 0 1 1
+1 1 0 0 0 1
+
+edges
+0 1 1 10
+`); err != nil {
 		t.Fatalf("write temp upload: %v", err)
 	}
 	if _, err := file.Seek(0, 0); err != nil {
 		t.Fatalf("seek temp upload: %v", err)
 	}
 
-	upload, err := store.SaveUpload(userID, file, &multipart.FileHeader{Filename: "input.msh"})
+	upload, err := store.SaveUpload(userID, file, &multipart.FileHeader{Filename: "input.mesh"})
 	if err != nil {
 		t.Fatalf("save upload: %v", err)
 	}
