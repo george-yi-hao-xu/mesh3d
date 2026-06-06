@@ -47,7 +47,7 @@ import { renderPointCloud, setMeshMessage } from "./mesh-viewer.js";
 export function createJobController(state, els, options) {
   const { onAuthError = () => false } = options;
   let playbackTimer = null;
-  let playbackButton = null;
+  let playbackControls = null;
 
   /**
    * Loads the current user's jobs and seeds the metadata cache.
@@ -214,7 +214,12 @@ export function createJobController(state, els, options) {
     els.tabs.innerHTML = `
       <div class="frame-head">
         <div class="frame-tools">
-          <button class="playback-button" type="button">Play</button>
+          <div class="transport-controls" aria-label="Timeline controls">
+            <button class="transport-button first-frame-button" type="button">|&lt;</button>
+            <button class="transport-button playback-button" type="button">Play</button>
+            <button class="transport-button stop-button" type="button">Stop</button>
+            <button class="transport-button last-frame-button" type="button">&gt;|</button>
+          </div>
           <span class="frame-title">Time frame</span>
         </div>
         <span class="frame-label"></span>
@@ -228,26 +233,44 @@ export function createJobController(state, els, options) {
 
     const slider = els.tabs.querySelector(".frame-slider");
     const label = els.tabs.querySelector(".frame-label");
-    const playButton = els.tabs.querySelector(".playback-button");
-    playbackButton = playButton;
+    const controls = {
+      first: els.tabs.querySelector(".first-frame-button"),
+      play: els.tabs.querySelector(".playback-button"),
+      stop: els.tabs.querySelector(".stop-button"),
+      last: els.tabs.querySelector(".last-frame-button"),
+    };
+    playbackControls = controls;
     const selectedIndex = Math.max(0, frames.findIndex((frame) => frame.url === selectedFrame.url));
     slider.value = String(selectedIndex);
     updateFrameLabel(label, frames[selectedIndex], selectedIndex, frames.length);
-    playButton.disabled = frames.length < 2;
-    playButton.classList.toggle("hidden", frames.length < 2);
-    playButton.addEventListener("click", () => {
+    setTransportDisabled(controls, frames.length < 2);
+
+    controls.first.addEventListener("click", () => {
+      stopPlayback();
+      selectFrameAt(0, frames, slider, label);
+    });
+
+    controls.play.addEventListener("click", () => {
       if (playbackTimer) {
         stopPlayback();
         return;
       }
-      startPlayback(frames, slider, label, playButton);
+      startPlayback(frames, slider, label, controls);
+    });
+
+    controls.stop.addEventListener("click", () => {
+      stopPlayback();
+      selectFrameAt(0, frames, slider, label);
+    });
+
+    controls.last.addEventListener("click", () => {
+      stopPlayback();
+      selectFrameAt(frames.length - 1, frames, slider, label);
     });
 
     slider.addEventListener("input", () => {
       stopPlayback();
-      const index = Number(slider.value);
-      updateFrameLabel(label, frames[index], index, frames.length);
-      selectFrame(frames[index].url);
+      selectFrameAt(Number(slider.value), frames, slider, label);
     });
   }
 
@@ -495,24 +518,38 @@ export function createJobController(state, els, options) {
   }
 
   /**
+   * Selects a frame by index and keeps slider, label, and rendered frame synchronized.
+   *
+   * @param {number} index
+   * @param {import("./api.js").MeshFrame[]} frames
+   * @param {HTMLInputElement} slider
+   * @param {HTMLElement} label
+   * @returns {void}
+   */
+  function selectFrameAt(index, frames, slider, label) {
+    const selectedIndex = Math.max(0, Math.min(frames.length - 1, index));
+    slider.value = String(selectedIndex);
+    updateFrameLabel(label, frames[selectedIndex], selectedIndex, frames.length);
+    selectFrame(frames[selectedIndex].url);
+  }
+
+  /**
    * Advances the selected timeline frame at a fixed playback cadence.
    *
    * @param {import("./api.js").MeshFrame[]} frames
    * @param {HTMLInputElement} slider
    * @param {HTMLElement} label
-   * @param {HTMLButtonElement} button
+   * @param {{ play: HTMLButtonElement }} controls
    * @returns {void}
    */
-  function startPlayback(frames, slider, label, button) {
+  function startPlayback(frames, slider, label, controls) {
     if (frames.length < 2) return;
     if (Number(slider.value) >= frames.length - 1) {
-      slider.value = "0";
-      updateFrameLabel(label, frames[0], 0, frames.length);
-      selectFrame(frames[0].url);
+      selectFrameAt(0, frames, slider, label);
     }
 
-    button.textContent = "Pause";
-    playbackButton = button;
+    controls.play.textContent = "Pause";
+    playbackControls = controls;
     playbackTimer = window.setInterval(() => {
       const currentIndex = Number(slider.value);
       if (currentIndex >= frames.length - 1) {
@@ -521,9 +558,7 @@ export function createJobController(state, els, options) {
       }
 
       const nextIndex = currentIndex + 1;
-      slider.value = String(nextIndex);
-      updateFrameLabel(label, frames[nextIndex], nextIndex, frames.length);
-      selectFrame(frames[nextIndex].url);
+      selectFrameAt(nextIndex, frames, slider, label);
 
       if (nextIndex >= frames.length - 1) {
         stopPlayback();
@@ -541,9 +576,23 @@ export function createJobController(state, els, options) {
       window.clearInterval(playbackTimer);
       playbackTimer = null;
     }
-    if (playbackButton) {
-      playbackButton.textContent = "Play";
+    if (playbackControls?.play) {
+      playbackControls.play.textContent = "Play";
     }
+  }
+
+  /**
+   * Enables or disables all compact timeline transport buttons together.
+   *
+   * @param {{ first: HTMLButtonElement, play: HTMLButtonElement, stop: HTMLButtonElement, last: HTMLButtonElement }} controls
+   * @param {boolean} disabled
+   * @returns {void}
+   */
+  function setTransportDisabled(controls, disabled) {
+    controls.first.disabled = disabled;
+    controls.play.disabled = disabled;
+    controls.stop.disabled = disabled;
+    controls.last.disabled = disabled;
   }
 
   /**
