@@ -164,6 +164,56 @@ func (m *MeshModel) WritePointCloud(path string, simTime float64, step int, fina
 	return nil
 }
 
+// WriteMeshSnapshot writes particle positions and spring topology in the mesh-v1 format.
+func (m *MeshModel) WriteMeshSnapshot(path string, simTime float64, step int, final bool) error {
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	kind := "checkpoint"
+	if final {
+		kind = "final"
+	}
+	particleIndex := make(map[*ParticleNode]int, len(m.Particles))
+	for i := range m.Particles {
+		particleIndex[&m.Particles[i]] = i
+	}
+
+	fmt.Fprintf(out, "# Mesh3D mesh snapshot\n")
+	fmt.Fprintf(out, "# Format: mesh-v1\n")
+	fmt.Fprintf(out, "# Kind: %s\n", kind)
+	fmt.Fprintf(out, "# Simulated time: %.6fs\n", simTime)
+	fmt.Fprintf(out, "# Step: %d\n", step)
+	fmt.Fprintf(out, "# Vertices: %d\n", len(m.Particles))
+	fmt.Fprintf(out, "# Edges: %d\n", len(m.Springs))
+	fmt.Fprintf(out, "\nvertices\n")
+	fmt.Fprintf(out, "# index x y z fixed mass\n")
+	for i, p := range m.Particles {
+		fixed := 0
+		if p.Fixed {
+			fixed = 1
+		}
+		fmt.Fprintf(out, "%d %.6f %.6f %.6f %d %.6f\n", i, p.Position.X, p.Position.Y, p.Position.Z, fixed, p.Mass)
+	}
+
+	fmt.Fprintf(out, "\nedges\n")
+	fmt.Fprintf(out, "# a_index b_index rest_length stiffness\n")
+	for _, spring := range m.Springs {
+		a, ok := particleIndex[spring.A]
+		if !ok {
+			return fmt.Errorf("spring endpoint A is not part of mesh particles")
+		}
+		b, ok := particleIndex[spring.B]
+		if !ok {
+			return fmt.Errorf("spring endpoint B is not part of mesh particles")
+		}
+		fmt.Fprintf(out, "%d %d %.6f %.6f\n", a, b, spring.RestLength, spring.Stiffness)
+	}
+	return nil
+}
+
 // loadPointCloud parses a .msh point-cloud file into solver particles.
 func loadPointCloud(path string, defaultMass float64) ([]ParticleNode, error) {
 	file, err := os.Open(path)

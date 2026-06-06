@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"io"
-	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -23,23 +22,8 @@ var (
 	errJobNotDeletable = errors.New("job is not finished")
 )
 
-// NewStore creates the in-memory indexes around the configured storage root.
-func NewStore(storageDir string) *Store {
-	return &Store{
-		storageDir: storageDir,
-		users:      make(map[string]*User),
-		usernames:  make(map[string]string),
-		uploads:    make(map[string]Upload),
-		jobs:       make(map[string]*Job),
-	}
-}
-
 func (s *Store) uploadMeshPath(uploadID string) string {
 	return filepath.Join(s.storageDir, "uploads", uploadID+".msh")
-}
-
-func (s *Store) uploadMetadataPath(uploadID string) string {
-	return filepath.Join(s.storageDir, "uploads", uploadID+".json")
 }
 
 func (s *Store) jobDir(jobID string) string {
@@ -48,14 +32,6 @@ func (s *Store) jobDir(jobID string) string {
 
 func (s *Store) jobInputPath(jobID string) string {
 	return filepath.Join(s.jobDir(jobID), "input.msh")
-}
-
-func (s *Store) jobConfigPath(jobID string) string {
-	return filepath.Join(s.jobDir(jobID), "config.json")
-}
-
-func (s *Store) jobMetadataPath(jobID string) string {
-	return filepath.Join(s.jobDir(jobID), "job.json")
 }
 
 func (s *Store) jobSnapshotDir(jobID string) string {
@@ -67,14 +43,14 @@ func (s *Store) jobSnapshotPath(jobID, fileName string) string {
 }
 
 func (s *Store) jobResultPath(jobID string) string {
-	return filepath.Join(s.jobDir(jobID), "final.msh")
+	return filepath.Join(s.jobDir(jobID), "final.mesh")
 }
 
 func (s *Store) jobArtifactPath(jobID, relPath string) string {
 	return filepath.Join(s.jobDir(jobID), relPath)
 }
 
-// Init creates required storage folders and reloads persisted metadata.
+// Init creates local artifact folders and applies the Postgres schema.
 func (s *Store) Init() error {
 	for _, dir := range []string{
 		s.storageDir,
@@ -85,88 +61,22 @@ func (s *Store) Init() error {
 			return err
 		}
 	}
-	if err := s.loadUsers(); err != nil {
-		return err
-	}
-	return s.loadMetadata()
+	return s.initPostgres()
 }
 
 // CreateUser validates and stores a new user with a bcrypt password hash.
 func (s *Store) CreateUser(username, password string) (*User, error) {
-	username, key, err := normalizeUsername(username)
-	if err != nil {
-		return nil, err
-	}
-	if len(password) < 8 {
-		return nil, errors.New("password must be at least 8 characters")
-	}
-
-	s.mu.Lock()
-	_, exists := s.usernames[key]
-	s.mu.Unlock()
-	if exists {
-		return nil, errors.New("username already exists")
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
-	}
-
-	user := &User{
-		ID:           newID("usr"),
-		Username:     username,
-		PasswordHash: string(hash),
-		CreatedAt:    time.Now().UTC(),
-	}
-
-	s.mu.Lock()
-	if _, exists := s.usernames[key]; exists {
-		s.mu.Unlock()
-		return nil, errors.New("username already exists")
-	}
-	s.users[user.ID] = user
-	s.usernames[key] = user.ID
-	users := s.cloneUsersLocked()
-	s.mu.Unlock()
-
-	if err := s.saveUsers(users); err != nil {
-		return nil, err
-	}
-	return cloneUser(user), nil
+	return s.createUserPostgres(username, password)
 }
 
 // AuthenticateUser verifies username/password credentials.
 func (s *Store) AuthenticateUser(username, password string) (*User, error) {
-	_, key, err := normalizeUsername(username)
-	if err != nil {
-		return nil, errors.New("invalid username or password")
-	}
-
-	s.mu.Lock()
-	id, ok := s.usernames[key]
-	user := s.users[id]
-	s.mu.Unlock()
-	if !ok || user == nil {
-		return nil, errors.New("invalid username or password")
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return nil, errors.New("invalid username or password")
-	}
-	return cloneUser(user), nil
+	return s.authenticateUserPostgres(username, password)
 }
 
 // GetUser returns a user by id.
 func (s *Store) GetUser(id string) (*User, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	user, ok := s.users[id]
-	if !ok {
-		return nil, false
-	}
-	return cloneUser(user), true
+	return s.getUserPostgres(id)
 }
 
 // SaveUpload persists an uploaded point-cloud file and its metadata.
@@ -197,27 +107,16 @@ func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart
 		Path:      path,
 		CreatedAt: time.Now().UTC(),
 	}
-
-	s.mu.Lock()
-	s.uploads[id] = upload
-	s.mu.Unlock()
-
-	if err := writeJSONFile(s.uploadMetadataPath(id), upload); err != nil {
+	if err := s.saveUploadPostgres(upload); err != nil {
 		return Upload{}, err
 	}
-
 	return upload, nil
 }
 
-// CreateJob creates a job folder with input and config copied from a prior upload.
+// CreateJob creates a job folder with input copied from a prior upload.
 func (s *Store) CreateJob(userID, uploadID, name string, config map[string]interface{}) (*Job, error) {
-	s.mu.Lock()
-	upload, ok := s.uploads[uploadID]
-	s.mu.Unlock()
+	upload, ok := s.uploadForUser(uploadID, userID)
 	if !ok {
-		return nil, errors.New("upload not found")
-	}
-	if upload.UserID != userID {
 		return nil, errors.New("upload not found")
 	}
 
@@ -226,9 +125,6 @@ func (s *Store) CreateJob(userID, uploadID, name string, config map[string]inter
 		return nil, err
 	}
 	if err := copyFile(upload.Path, s.jobInputPath(id)); err != nil {
-		return nil, err
-	}
-	if err := writeJSONFile(s.jobConfigPath(id), config); err != nil {
 		return nil, err
 	}
 
@@ -249,12 +145,7 @@ func (s *Store) CreateJob(userID, uploadID, name string, config map[string]inter
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-
-	s.mu.Lock()
-	s.jobs[id] = job
-	s.mu.Unlock()
-
-	if err := s.saveJobMetadata(job); err != nil {
+	if err := s.insertJobPostgres(job); err != nil {
 		return nil, err
 	}
 	return cloneJob(job), nil
@@ -271,207 +162,39 @@ func defaultJobName(createdAt time.Time, inputName string) string {
 	return createdAt.Format("2006-01-02_15-04-05") + "_" + meshName
 }
 
-// ListJobs returns cloned user-owned job records so callers cannot mutate store state.
+// ListJobs returns user-owned job records.
 func (s *Store) ListJobs(userID string) []*Job {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	jobs := make([]*Job, 0, len(s.jobs))
-	for _, job := range s.jobs {
-		if job.UserID == userID {
-			jobs = append(jobs, cloneJob(job))
-		}
-	}
-	return jobs
+	return s.listJobsPostgres(userID)
 }
 
-// GetJob returns a cloned job record by id.
+// GetJob returns a job record by id.
 func (s *Store) GetJob(id string) (*Job, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	job, ok := s.jobs[id]
-	if !ok {
-		return nil, false
-	}
-	return cloneJob(job), true
+	return s.getJobPostgres(id)
 }
 
-// GetJobForUser returns a cloned job only when it belongs to the requested user.
+// GetJobForUser returns a job only when it belongs to the requested user.
 func (s *Store) GetJobForUser(userID, id string) (*Job, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	job, ok := s.jobs[id]
-	if !ok || job.UserID != userID {
-		return nil, false
-	}
-	return cloneJob(job), true
+	return s.getJobForUserPostgres(userID, id)
 }
 
 // DeleteJobForUser removes a finished job and its stored artifacts when it belongs to the requested user.
 func (s *Store) DeleteJobForUser(userID, id string) error {
-	s.mu.Lock()
-	job, ok := s.jobs[id]
-	if !ok || job.UserID != userID {
-		s.mu.Unlock()
-		return errJobNotFound
-	}
-	if job.Status == "queued" || job.Status == "running" {
-		s.mu.Unlock()
-		return errJobNotDeletable
-	}
-
-	s.mu.Unlock()
-
-	jobDir := s.jobDir(id)
-	if err := os.RemoveAll(jobDir); err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	delete(s.jobs, id)
-	s.mu.Unlock()
-	return nil
+	return s.deleteJobForUserPostgres(userID, id)
 }
 
 // SetJobStatus updates a job state.
 func (s *Store) SetJobStatus(id, status, msg string) {
-	s.mu.Lock()
-	job, ok := s.jobs[id]
-	if !ok {
-		s.mu.Unlock()
-		return
-	}
-	job.Status = status
-	job.UpdatedAt = time.Now().UTC()
-	if msg != "" {
-		job.Error = msg
-	}
-	if status == "done" || status == "failed" {
-		now := time.Now().UTC()
-		job.FinishedAt = &now
-	}
-	cloned := cloneJob(job)
-	s.mu.Unlock()
-
-	_ = s.saveJobMetadata(cloned)
+	s.setJobStatusPostgres(id, status, msg)
 }
 
 // AddSnapshot records a checkpoint artifact.
 func (s *Store) AddSnapshot(jobID string, snapshot Snapshot) {
-	s.mu.Lock()
-	job, ok := s.jobs[jobID]
-	if !ok {
-		s.mu.Unlock()
-		return
-	}
-	job.Snapshots = append(job.Snapshots, snapshot)
-	job.UpdatedAt = time.Now().UTC()
-	cloned := cloneJob(job)
-	s.mu.Unlock()
-
-	_ = s.saveJobMetadata(cloned)
+	s.addSnapshotPostgres(jobID, snapshot)
 }
 
 // SetResult marks a job finished and stores the solver outcome.
 func (s *Store) SetResult(jobID string, result solver.SolverResult) {
-	s.mu.Lock()
-	job, ok := s.jobs[jobID]
-	if !ok {
-		s.mu.Unlock()
-		return
-	}
-	job.Status = "done"
-	job.ResultURL = "/api/jobs/" + jobID + "/result"
-	job.Converged = result.Converged
-	job.Reason = result.Reason
-	job.FinalTime = result.SimTime
-	job.FinalStep = result.Step
-	job.UpdatedAt = time.Now().UTC()
-	now := time.Now().UTC()
-	job.FinishedAt = &now
-	cloned := cloneJob(job)
-	s.mu.Unlock()
-
-	_ = s.saveJobMetadata(cloned)
-}
-
-// saveJobMetadata writes the latest job metadata to disk.
-func (s *Store) saveJobMetadata(job *Job) error {
-	return writeJSONFile(s.jobMetadataPath(job.ID), job)
-}
-
-func (s *Store) saveUsers(users []*User) error {
-	return writeJSONFile(filepath.Join(s.storageDir, "users.json"), users)
-}
-
-func (s *Store) loadUsers() error {
-	path := filepath.Join(s.storageDir, "users.json")
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-
-	var users []*User
-	if err := readJSONFile(path, &users); err != nil {
-		return err
-	}
-	for _, user := range users {
-		if user == nil || user.ID == "" || user.Username == "" || user.PasswordHash == "" {
-			continue
-		}
-		s.users[user.ID] = user
-		s.usernames[strings.ToLower(user.Username)] = user.ID
-	}
-	return nil
-}
-
-// loadMetadata rebuilds in-memory upload and job indexes from disk.
-func (s *Store) loadMetadata() error {
-	uploadFiles, err := filepath.Glob(filepath.Join(s.storageDir, "uploads", "*.json"))
-	if err != nil {
-		return err
-	}
-	for _, path := range uploadFiles {
-		var upload Upload
-		if err := readJSONFile(path, &upload); err != nil {
-			log.Printf("skip upload metadata %s: %v", path, err)
-			continue
-		}
-		upload.Path = s.uploadMeshPath(upload.ID)
-		if _, err := os.Stat(upload.Path); err != nil {
-			continue
-		}
-		s.uploads[upload.ID] = upload
-	}
-
-	jobFiles, err := filepath.Glob(filepath.Join(s.storageDir, "jobs", "*", "job.json"))
-	if err != nil {
-		return err
-	}
-	for _, path := range jobFiles {
-		var job Job
-		if err := readJSONFile(path, &job); err != nil {
-			log.Printf("skip job metadata %s: %v", path, err)
-			continue
-		}
-		if job.UserID == "" {
-			upload, ok := s.uploads[job.UploadID]
-			if !ok || upload.UserID == "" {
-				log.Printf("job metadata %s has no userId and upload owner could not be found", path)
-			} else {
-				job.UserID = upload.UserID
-				if err := s.saveJobMetadata(&job); err != nil {
-					log.Printf("could not backfill userId for job metadata %s: %v", path, err)
-				}
-			}
-		}
-		s.jobs[job.ID] = &job
-	}
-	return nil
+	s.setResultPostgres(jobID, result)
 }
 
 func normalizeUsername(username string) (string, string, error) {
@@ -485,20 +208,24 @@ func normalizeUsername(username string) (string, string, error) {
 	return username, strings.ToLower(username), nil
 }
 
-func (s *Store) cloneUsersLocked() []*User {
-	users := make([]*User, 0, len(s.users))
-	for _, user := range s.users {
-		users = append(users, cloneUser(user))
-	}
-	return users
-}
-
 func cloneUser(user *User) *User {
 	if user == nil {
 		return nil
 	}
 	cp := *user
 	return &cp
+}
+
+func bcryptPasswordHash(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
+}
+
+func comparePasswordHash(hash, password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }
 
 // cloneJob copies a job deeply enough for safe read-only use outside Store.

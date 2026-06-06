@@ -21,5 +21,5 @@ func SnapshotFileName(simTime float64) string {
 	if len(label) < 6 {
 		label = strings.Repeat("0", 6-len(label)) + label
 	}
-	return label + ".msh"
+	return label + ".mesh"
 }

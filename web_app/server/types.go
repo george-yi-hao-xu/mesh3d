@@ -1,7 +1,7 @@
 package main
 
 import (
-	"sync"
+	"database/sql"
 	"time"
 )
 
@@ -65,12 +65,8 @@ type JobCreateResponse struct {
 }
 
 type Store struct {
-	mu         sync.Mutex
+	db         *sql.DB
 	storageDir string
-	users      map[string]*User
-	usernames  map[string]string
-	uploads    map[string]Upload
-	jobs       map[string]*Job
 }
 
 type App struct {

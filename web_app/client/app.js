@@ -127,7 +127,7 @@ els.logout.addEventListener("click", async () => {
 });
 
 els.deleteJob.addEventListener("click", async () => {
-  const job = state.jobs.find((item) => item.id === state.activeJobId);
+  const job = (Array.isArray(state.jobs) ? state.jobs : []).find((item) => item.id === state.activeJobId);
   if (!job) return;
   openDeleteOverlay(job);
 });

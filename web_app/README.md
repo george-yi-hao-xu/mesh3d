@@ -6,17 +6,49 @@ This folder contains the server-backed web workflow for Mesh3D.
 
 - Frontend: vanilla HTML/CSS/JS
 - Backend: Go `net/http`
-- Storage: local filesystem first
+- Database: Postgres metadata
+- Storage: local filesystem `.msh` uploads and `.mesh` solver artifacts
 - Solver: Go mass-spring solver ported from the C++ logic
 
 ## Local Run
 
-Install Go, then run:
+Install Go. For the Postgres-backed metadata store, start a local database:
 
-```powershell
+```bash
+docker run --name mesh3d-postgres \
+  --env-file server/.env \
+  -p 5432:5432 \
+  -v mesh3d_pgdata:/var/lib/postgresql/data \
+  -d postgres:16
+```
+
+Then run the server. It loads `server/.env` automatically:
+
+```bash
 cd web_app/server
+go mod tidy
 go run .
 ```
+
+On startup, the server applies `server/schema/postgres.sql`. `MESH3D_DATABASE_URL` is required. Uploaded `.msh` point clouds and generated `.mesh` solver artifacts remain on the local filesystem.
+
+To inspect Postgres from the terminal, open `psql` inside the running container:
+
+```bash
+docker exec -it mesh3d-postgres psql -U mesh3d -d mesh3d
+```
+
+Useful `psql` commands:
+
+```sql
+\dt
+\d jobs
+SELECT * FROM jobs LIMIT 10;
+SELECT * FROM uploads LIMIT 10;
+\q
+```
+
+`psql` meta-commands like `\dt`, `\d`, and `\q` do not need semicolons. SQL queries like `SELECT ...` do need semicolons.
 
 Open:
 
@@ -24,11 +56,13 @@ Open:
 http://localhost:8080
 ```
 
-The server stores uploaded point clouds, job metadata, checkpoint `.msh` files, and final `.msh` files under:
+The server stores uploaded point clouds, checkpoint `.mesh` files, and final `.mesh` files under:
 
 ```text
 web_app/server/storage/
 ```
+
+Postgres stores users, upload metadata, job metadata, job config, and snapshot metadata.
 
 ## API
 
@@ -96,7 +130,7 @@ It:
 reads multipart file field "pointCloud"
 calls store.SaveUpload(...)
 writes storage/uploads/{uploadId}.msh
-writes storage/uploads/{uploadId}.json
+records upload metadata in Postgres
 returns upload JSON to the browser
 ```
 
@@ -115,7 +149,7 @@ reads JSON body: uploadId + config
 calls store.CreateJob(...)
 creates storage/jobs/{jobId}/
 copies input.msh into the job folder
-writes config.json
+records job metadata and config in Postgres
 runs the solver
 reads checkpoint and final mesh files
 returns job JSON plus frame mesh text
@@ -129,18 +163,18 @@ It:
 
 ```text
 loads storage/jobs/{jobId}/input.msh
-loads storage/jobs/{jobId}/config.json through the job config
+loads solver settings from the Postgres-backed job config
 creates the solver mesh
 runs physics
-writes checkpoint .msh files
-writes final.msh
-updates job metadata
+writes checkpoint .mesh files
+writes final.mesh
+updates job metadata in Postgres
 ```
 
 At each checkpoint, the server writes:
 
 ```text
-storage/jobs/{jobId}/snapshots/{time}.msh
+storage/jobs/{jobId}/snapshots/{time}.mesh
 ```
 
 Then it calls:
@@ -152,7 +186,7 @@ store.AddSnapshot(...)
 When finished, it writes:
 
 ```text
-storage/jobs/{jobId}/final.msh
+storage/jobs/{jobId}/final.mesh
 ```
 
 Then it calls:
@@ -161,11 +195,11 @@ Then it calls:
 store.SetResult(...)
 ```
 
-After the solver finishes, `ReadJobFrames` loads the generated `.msh` text and includes it in the `POST /api/jobs` response. The browser stores those frames on the selected job and shows the final frame by default.
+After the solver finishes, `ReadJobFrames` loads the generated `.mesh` text and includes it in the `POST /api/jobs` response. The browser stores those frames on the selected job and shows the final frame by default.
 
 ### 5. Browser Fetches a Result File
 
-For stored jobs or downloads, the browser can still request an existing `.msh` file:
+For stored jobs or downloads, the browser can still request an existing `.mesh` file:
 
 ```text
 GET /api/jobs/{jobId}/snapshots/{file}
@@ -248,13 +282,13 @@ stableFrames
 
 ## Google Cloud Direction
 
-For the first deploy, use Cloud Run for the Go server. Local filesystem storage is fine for local development, but production should move artifacts to Google Cloud Storage and metadata to Firestore, Cloud SQL, or SQLite on a persistent volume.
+For the first deploy, use Cloud Run for the Go server. Local filesystem artifact storage is fine for local development, but production should move artifacts to Google Cloud Storage and metadata to Cloud SQL for PostgreSQL.
 
 The intended production split is:
 
 ```text
 Cloud Run: Go API/server and solver
-Cloud Storage: uploads, snapshots, final .msh files
+Cloud Storage: uploads, snapshots, final .mesh files
 Database: job metadata
 Solver: Go solver first; external headless solver process remains possible later
 ```

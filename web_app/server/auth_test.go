@@ -21,6 +21,12 @@ func TestRegisterLoginLogout(t *testing.T) {
 	if cookie := authCookieFromResponse(registerRes); cookie == nil || cookie.Value == "" {
 		t.Fatalf("register did not set auth cookie")
 	}
+	var registerBody struct {
+		User userResponse `json:"user"`
+	}
+	if err := json.Unmarshal(registerRes.Body.Bytes(), &registerBody); err != nil {
+		t.Fatalf("decode register body: %v", err)
+	}
 
 	duplicateRes := postJSON(handler, "/api/auth/register", `{"username":"Alice","password":"password123"}`, nil)
 	if duplicateRes.Code != http.StatusBadRequest {
@@ -40,10 +46,7 @@ func TestRegisterLoginLogout(t *testing.T) {
 		t.Fatalf("bad login status = %d, want %d", badLoginRes.Code, http.StatusUnauthorized)
 	}
 
-	user, ok := app.store.GetUserByUsernameForTest("alice")
-	if !ok {
-		t.Fatalf("registered user was not stored")
-	}
+	user := &User{ID: registerBody.User.ID, Username: registerBody.User.Username}
 	logoutRes := postJSON(handler, "/api/auth/logout", `{}`, authCookie(t, app, user))
 	if logoutRes.Code != http.StatusOK {
 		t.Fatalf("logout status = %d, want %d", logoutRes.Code, http.StatusOK)
@@ -127,51 +130,6 @@ func TestJobsAndResultsAreUserScoped(t *testing.T) {
 
 }
 
-func TestLoadMetadataBackfillsJobUserFromUpload(t *testing.T) {
-	storageDir := t.TempDir()
-	store := NewStore(storageDir)
-	if err := store.Init(); err != nil {
-		t.Fatalf("init store: %v", err)
-	}
-	alice, err := store.CreateUser("alice", "password123")
-	if err != nil {
-		t.Fatalf("create alice: %v", err)
-	}
-
-	upload := saveTestUpload(t, store, alice.ID)
-	job, err := store.CreateJob(alice.ID, upload.ID, "legacy job", map[string]interface{}{"maxSimTime": 1})
-	if err != nil {
-		t.Fatalf("create job: %v", err)
-	}
-
-	legacyJob := *job
-	legacyJob.UserID = ""
-	if err := writeJSONFile(store.jobMetadataPath(job.ID), legacyJob); err != nil {
-		t.Fatalf("write legacy job metadata: %v", err)
-	}
-
-	reloaded := NewStore(storageDir)
-	if err := reloaded.Init(); err != nil {
-		t.Fatalf("reload store: %v", err)
-	}
-
-	got, ok := reloaded.GetJobForUser(alice.ID, job.ID)
-	if !ok {
-		t.Fatalf("reloaded legacy job was not owned by alice")
-	}
-	if got.UserID != alice.ID {
-		t.Fatalf("reloaded job user id = %q, want %q", got.UserID, alice.ID)
-	}
-
-	var persisted Job
-	if err := readJSONFile(reloaded.jobMetadataPath(job.ID), &persisted); err != nil {
-		t.Fatalf("read backfilled job metadata: %v", err)
-	}
-	if persisted.UserID != alice.ID {
-		t.Fatalf("persisted job user id = %q, want %q", persisted.UserID, alice.ID)
-	}
-}
-
 func TestDeleteJobIsOwnedAndOnlyForFinishedJobs(t *testing.T) {
 	app, handler := newTestApp(t)
 	alice, err := app.store.CreateUser("alice", "password123")
@@ -242,10 +200,23 @@ func TestJWTRejectsExpiredAndInvalidSignature(t *testing.T) {
 func newTestApp(t *testing.T) (*App, http.Handler) {
 	t.Helper()
 
-	store := NewStore(t.TempDir())
+	databaseURL := strings.TrimSpace(os.Getenv("MESH3D_TEST_DATABASE_URL"))
+	if databaseURL == "" {
+		t.Skip("MESH3D_TEST_DATABASE_URL is required for database-backed server tests")
+	}
+
+	store, err := NewPostgresStore(t.TempDir(), databaseURL)
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = store.db.Close()
+	})
 	if err := store.Init(); err != nil {
 		t.Fatalf("init store: %v", err)
 	}
+	resetTestDB(t, store)
+
 	app := &App{store: store, clientDir: "../client", jwtSecret: []byte("test-secret")}
 
 	mux := http.NewServeMux()
@@ -258,6 +229,15 @@ func newTestApp(t *testing.T) (*App, http.Handler) {
 	mux.HandleFunc("/api/jobs", app.requireAuth(app.handleJobs))
 	mux.HandleFunc("/api/jobs/", app.requireAuth(app.handleJobRoutes))
 	return app, mux
+}
+
+func resetTestDB(t *testing.T, store *Store) {
+	t.Helper()
+
+	_, err := store.db.Exec(`truncate table job_snapshots, jobs, uploads, users restart identity cascade`)
+	if err != nil {
+		t.Fatalf("reset test database: %v", err)
+	}
 }
 
 func saveTestUpload(t *testing.T, store *Store, userID string) Upload {
@@ -322,15 +302,4 @@ func authCookieFromResponse(res *httptest.ResponseRecorder) *http.Cookie {
 		}
 	}
 	return nil
-}
-
-func (s *Store) GetUserByUsernameForTest(username string) (*User, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	id, ok := s.usernames[strings.ToLower(username)]
-	if !ok {
-		return nil, false
-	}
-	return cloneUser(s.users[id]), true
 }

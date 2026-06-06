@@ -55,7 +55,7 @@ export function createJobController(state, els, options) {
    * @returns {Promise<void>}
    */
   async function refreshJobs() {
-    state.jobs = await listJobs();
+    state.jobs = normalizeJobList(await listJobs());
     state.jobs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     for (const job of state.jobs) {
       cacheJob(job);
@@ -115,7 +115,7 @@ export function createJobController(state, els, options) {
   function renderJobs() {
     els.jobList.innerHTML = "";
 
-    if (state.jobs.length === 0) {
+    if (!Array.isArray(state.jobs) || state.jobs.length === 0) {
       els.jobList.innerHTML = `<p class="job-meta">No jobs yet.</p>`;
       return;
     }
@@ -193,7 +193,6 @@ export function createJobController(state, els, options) {
     } else {
       const selectedFrame = chooseFrame(frames, autoSelectFrame);
       renderFrameSlider(frames, selectedFrame);
-      preloadMissingFrames(state.activeJobId);
       if (autoSelectFrame || !state.activeFrameUrl) {
         selectFrame(selectedFrame.url);
       } else {
@@ -284,7 +283,7 @@ export function createJobController(state, els, options) {
     const jobIdAtRequest = state.activeJobId;
     const job = getActiveJob();
     state.activeFrameUrl = url;
-    const frame = state.activeFrames.find((item) => item.url === url);
+    const frame = normalizeFrameList(state.activeFrames).find((item) => item.url === url);
     if (!frame) return;
 
     if (frame.error) {
@@ -295,7 +294,11 @@ export function createJobController(state, els, options) {
     }
 
     if (!frame.loaded) {
-      setMeshMessage(els, `Loading ${frame.label}.`);
+      if (state.viewer.meshGroup) {
+        setMeshMessage(els, "", true);
+      } else {
+        setMeshMessage(els, `Loading ${frame.label}.`);
+      }
       await loadFrame(frame);
     }
     if (state.activeJobId !== jobIdAtRequest || state.activeFrameUrl !== url) return;
@@ -347,6 +350,7 @@ export function createJobController(state, els, options) {
    * @returns {void}
    */
   function upsertJob(job) {
+    state.jobs = normalizeJobList(state.jobs);
     const index = state.jobs.findIndex((item) => item.id === job.id);
     if (index >= 0) {
       state.jobs[index] = job;
@@ -356,7 +360,7 @@ export function createJobController(state, els, options) {
   }
 
   function removeJob(jobId) {
-    state.jobs = state.jobs.filter((job) => job.id !== jobId);
+    state.jobs = normalizeJobList(state.jobs).filter((job) => job.id !== jobId);
     state.jobCache.delete(jobId);
   }
 
@@ -395,7 +399,8 @@ export function createJobController(state, els, options) {
 
   function getJobById(jobId) {
     if (!jobId) return null;
-    return state.jobs.find((job) => job.id === jobId) || state.jobCache.get(jobId) || null;
+    const jobs = normalizeJobList(state.jobs);
+    return jobs.find((job) => job.id === jobId) || state.jobCache.get(jobId) || null;
   }
 
   function clearActiveJobView() {
@@ -422,7 +427,7 @@ export function createJobController(state, els, options) {
 
   function buildDownloadName(job, url) {
     const prefix = sanitizeDownloadStem(jobTitle(job) || "mesh");
-    const suffix = url.endsWith("/result") ? "final.msh" : url.split("/").pop() || "mesh.msh";
+    const suffix = url.endsWith("/result") ? "final.mesh" : url.split("/").pop() || "mesh.mesh";
     return `${prefix}_${suffix}`;
   }
 
@@ -469,8 +474,10 @@ export function createJobController(state, els, options) {
    * @returns {import("./api.js").MeshFrame[]}
    */
   function syncActiveFrames(frames) {
-    const currentByUrl = new Map(state.activeFrames.map((frame) => [frame.url, frame]));
-    state.activeFrames = frames.map((frame) => {
+    const nextFrames = Array.isArray(frames) ? frames : [];
+    const activeFrames = Array.isArray(state.activeFrames) ? state.activeFrames : [];
+    const currentByUrl = new Map(activeFrames.map((frame) => [frame.url, frame]));
+    state.activeFrames = nextFrames.map((frame) => {
       const current = currentByUrl.get(frame.url);
       if (current) {
         current.label = frame.label;
@@ -487,6 +494,14 @@ export function createJobController(state, els, options) {
       };
     });
     return state.activeFrames;
+  }
+
+  function normalizeJobList(jobs) {
+    return Array.isArray(jobs) ? jobs : [];
+  }
+
+  function normalizeFrameList(frames) {
+    return Array.isArray(frames) ? frames : [];
   }
 
   /**
@@ -524,13 +539,13 @@ export function createJobController(state, els, options) {
    * @param {import("./api.js").MeshFrame[]} frames
    * @param {HTMLInputElement} slider
    * @param {HTMLElement} label
-   * @returns {void}
+   * @returns {Promise<void>}
    */
   function selectFrameAt(index, frames, slider, label) {
     const selectedIndex = Math.max(0, Math.min(frames.length - 1, index));
     slider.value = String(selectedIndex);
     updateFrameLabel(label, frames[selectedIndex], selectedIndex, frames.length);
-    selectFrame(frames[selectedIndex].url);
+    return selectFrame(frames[selectedIndex].url);
   }
 
   /**
@@ -550,7 +565,8 @@ export function createJobController(state, els, options) {
 
     controls.play.textContent = "Pause";
     playbackControls = controls;
-    playbackTimer = window.setInterval(() => {
+    const tick = async () => {
+      if (!playbackTimer) return;
       const currentIndex = Number(slider.value);
       if (currentIndex >= frames.length - 1) {
         stopPlayback();
@@ -558,12 +574,17 @@ export function createJobController(state, els, options) {
       }
 
       const nextIndex = currentIndex + 1;
-      selectFrameAt(nextIndex, frames, slider, label);
+      await selectFrameAt(nextIndex, frames, slider, label);
 
       if (nextIndex >= frames.length - 1) {
         stopPlayback();
+        return;
       }
-    }, 50);
+      if (playbackTimer) {
+        playbackTimer = window.setTimeout(tick, 50);
+      }
+    };
+    playbackTimer = window.setTimeout(tick, 50);
   }
 
   /**
@@ -573,7 +594,7 @@ export function createJobController(state, els, options) {
    */
   function stopPlayback() {
     if (playbackTimer) {
-      window.clearInterval(playbackTimer);
+      window.clearTimeout(playbackTimer);
       playbackTimer = null;
     }
     if (playbackControls?.play) {
@@ -593,41 +614,6 @@ export function createJobController(state, els, options) {
     controls.play.disabled = disabled;
     controls.stop.disabled = disabled;
     controls.last.disabled = disabled;
-  }
-
-  /**
-   * Starts background loading for frames that were not bundled in the job creation response.
-   *
-   * @param {string | null} jobId
-   * @returns {void}
-   */
-  function preloadMissingFrames(jobId) {
-    const frames = state.activeFrames.filter((frame) => !frame.loaded && !frame.loading && !frame.error);
-    if (frames.length === 0) return;
-
-    let completed = state.activeFrames.filter((frame) => frame.loaded || frame.error).length;
-    if (!selectedFrameIsLoaded()) {
-      setMeshMessage(els, `Loading frames ${completed}/${state.activeFrames.length}.`);
-    }
-
-    for (const frame of frames) {
-      loadFrame(frame).finally(() => {
-        if (state.activeJobId !== jobId) return;
-        completed += 1;
-        const allDone = completed >= state.activeFrames.length;
-        if (!allDone) {
-          if (!selectedFrameIsLoaded()) {
-            setMeshMessage(els, `Loading frames ${completed}/${state.activeFrames.length}.`);
-          }
-          return;
-        }
-        if (!state.activeFrameUrl) {
-          selectFrame(state.activeFrames[state.activeFrames.length - 1].url);
-        } else if (selectedFrameIsLoaded()) {
-          setMeshMessage(els, "", true);
-        }
-      });
-    }
   }
 
   /**
@@ -659,16 +645,6 @@ export function createJobController(state, els, options) {
       // The frame stores its own error; callers decide whether to surface it.
     }
     return frame;
-  }
-
-  /**
-   * Reports whether the current slider-selected frame has render-ready point-cloud data.
-   *
-   * @returns {boolean}
-   */
-  function selectedFrameIsLoaded() {
-    const selected = state.activeFrames.find((frame) => frame.url === state.activeFrameUrl);
-    return Boolean(selected?.loaded);
   }
 
   return {

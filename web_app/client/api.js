@@ -1,4 +1,4 @@
-import { parsePointCloud } from "./mesh-parser.js";
+import { parseMeshData } from "./mesh-parser.js";
 
 /**
  * @typedef {{ id: string, username: string }} User
@@ -16,7 +16,7 @@ import { parsePointCloud } from "./mesh-parser.js";
  *   error?: string,
  *   createdAt: string
  * }} Job
- * @typedef {{ text: string, pointCloud: import("./mesh-parser.js").PointCloud }} MeshData
+ * @typedef {{ text: string, pointCloud: import("./mesh-parser.js").MeshData }} MeshData
  * @typedef {{
  *   label: string,
  *   url: string,
@@ -24,7 +24,7 @@ import { parsePointCloud } from "./mesh-parser.js";
  *   isFinal?: boolean,
  *   simTime?: number,
  *   step?: number,
- *   pointCloud: import("./mesh-parser.js").PointCloud,
+ *   pointCloud: import("./mesh-parser.js").MeshData,
  *   loaded: boolean,
  *   loading: boolean,
  *   error: Error | null,
@@ -191,7 +191,7 @@ export async function fetchMeshData(url) {
   const text = await res.text();
   return {
     text,
-    pointCloud: parsePointCloud(text),
+    pointCloud: parseMeshData(text),
   };
 }
 
@@ -202,9 +202,9 @@ export async function fetchMeshData(url) {
  * @returns {MeshFrame[]}
  */
 export function parseFrameData(frames) {
-  return frames.map((frame) => ({
+  return (Array.isArray(frames) ? frames : []).map((frame) => ({
     ...frame,
-    pointCloud: parsePointCloud(frame.text),
+    pointCloud: parseMeshData(frame.text),
     loaded: true,
     loading: false,
     error: null,

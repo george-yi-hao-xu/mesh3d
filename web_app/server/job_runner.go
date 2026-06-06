@@ -26,7 +26,7 @@ func RunGoSolver(store *Store, jobID string) (*Job, error) {
 	result, err := solver.RunMesh(model, cfg, func(simTime float64, step int) error {
 		fileName := solver.SnapshotFileName(simTime)
 		path := store.jobSnapshotPath(jobID, fileName)
-		if err := model.WritePointCloud(path, simTime, step, false); err != nil {
+		if err := model.WriteMeshSnapshot(path, simTime, step, false); err != nil {
 			return err
 		}
 		store.AddSnapshot(jobID, Snapshot{
@@ -44,7 +44,7 @@ func RunGoSolver(store *Store, jobID string) (*Job, error) {
 		return getJobAfterRun(store, jobID), err
 	}
 
-	if err := model.WritePointCloud(store.jobResultPath(jobID), result.SimTime, result.Step, true); err != nil {
+	if err := model.WriteMeshSnapshot(store.jobResultPath(jobID), result.SimTime, result.Step, true); err != nil {
 		store.SetJobStatus(jobID, "failed", err.Error())
 		return getJobAfterRun(store, jobID), err
 	}

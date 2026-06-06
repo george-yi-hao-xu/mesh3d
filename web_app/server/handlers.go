@@ -265,10 +265,26 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 		}
 		a.serveJobFile(w, r, user.ID, jobID, filepath.Join("snapshots", parts[2]))
 	case "result":
-		a.serveJobFile(w, r, user.ID, jobID, "final.msh")
+		a.serveJobResultFile(w, r, user.ID, jobID)
 	default:
 		writeError(w, http.StatusNotFound, "not found")
 	}
+}
+
+func (a *App) serveJobResultFile(w http.ResponseWriter, r *http.Request, userID, jobID string) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if _, ok := a.store.GetJobForUser(userID, jobID); !ok {
+		writeError(w, http.StatusNotFound, "job not found")
+		return
+	}
+	if _, err := os.Stat(a.store.jobResultPath(jobID)); err == nil {
+		serveFile(w, r, a.store.jobResultPath(jobID))
+		return
+	}
+	serveFile(w, r, a.store.jobArtifactPath(jobID, "final.msh"))
 }
 
 // serveJobFile serves generated job artifacts from the job storage directory.
@@ -283,6 +299,10 @@ func (a *App) serveJobFile(w http.ResponseWriter, r *http.Request, userID, jobID
 	}
 
 	path := a.store.jobArtifactPath(jobID, relPath)
+	serveFile(w, r, path)
+}
+
+func serveFile(w http.ResponseWriter, r *http.Request, path string) {
 	if _, err := os.Stat(path); err != nil {
 		writeError(w, http.StatusNotFound, "file not found")
 		return

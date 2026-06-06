@@ -34,29 +34,6 @@ func copyFile(src, dst string) error {
 	return out.Sync()
 }
 
-// writeJSONFile writes indented JSON to a local file.
-func writeJSONFile(path string, value interface{}) error {
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(value)
-}
-
-// readJSONFile decodes JSON from a local file into value.
-func readJSONFile(path string, value interface{}) error {
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	return json.NewDecoder(file).Decode(value)
-}
-
 // writeJSON sends a JSON response with the provided status code.
 func writeJSON(w http.ResponseWriter, status int, value interface{}) {
 	w.Header().Set("Content-Type", "application/json")
@@ -104,6 +81,52 @@ func envOr(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// loadDotEnv reads KEY=value pairs from a local .env file without overriding
+// variables already provided by the shell.
+func loadDotEnv(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+
+	for lineNumber, rawLine := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "export ") {
+			line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+		}
+
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			return fmt.Errorf("parse %s:%d: expected KEY=value", path, lineNumber+1)
+		}
+
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" {
+			return fmt.Errorf("parse %s:%d: empty key", path, lineNumber+1)
+		}
+		if len(value) >= 2 {
+			quote := value[:1]
+			if (quote == `"` || quote == `'`) && strings.HasSuffix(value, quote) {
+				value = value[1 : len(value)-1]
+			}
+		}
+		if os.Getenv(key) == "" {
+			if err := os.Setenv(key, value); err != nil {
+				return fmt.Errorf("set %s from %s:%d: %w", key, path, lineNumber+1, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // logRequests wraps an HTTP handler with simple method/path/duration logging.

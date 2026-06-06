@@ -3,18 +3,32 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
 )
 
 // main configures storage, registers routes, and starts the HTTP server.
 func main() {
+	if err := loadDotEnv(".env"); err != nil {
+		log.Printf("warning: %v", err)
+	}
+
 	addr := envOr("MESH3D_ADDR", ":8080")
 	storageDir := envOr("MESH3D_STORAGE_DIR", "storage")
 	clientDir := envOr("MESH3D_CLIENT_DIR", "../client")
+	databaseURL := strings.TrimSpace(os.Getenv("MESH3D_DATABASE_URL"))
+	if databaseURL == "" {
+		log.Fatal("MESH3D_DATABASE_URL is required")
+	}
 
-	store := NewStore(storageDir)
+	store, err := NewPostgresStore(storageDir, databaseURL)
+	if err != nil {
+		log.Fatalf("connect postgres: %v", err)
+	}
 	if err := store.Init(); err != nil {
 		log.Fatalf("init storage: %v", err)
 	}
+	log.Printf("using postgres metadata store")
 
 	app := &App{store: store, clientDir: clientDir, jwtSecret: initJWTSecret()}
 

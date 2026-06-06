@@ -44,7 +44,8 @@ create table if not exists job_snapshots (
   created_at timestamptz not null
 );
 
-create index if not exists users_username_lower_idx on users (lower(username));
+drop index if exists users_username_lower_idx;
+create unique index if not exists users_username_lower_idx on users (lower(username));
 create index if not exists uploads_user_id_created_at_idx on uploads (user_id, created_at desc);
 create index if not exists jobs_user_id_created_at_idx on jobs (user_id, created_at desc);
 create index if not exists jobs_upload_id_idx on jobs (upload_id);

@@ -1,4 +1,4 @@
-import { computePointBounds, inferEdges, normalizePoints, pointBoundsScale } from "./mesh-parser.js";
+import { computePointBounds, normalizePoints, pointBoundsScale } from "./mesh-parser.js";
 
 /**
  * @typedef {{
@@ -8,11 +8,11 @@ import { computePointBounds, inferEdges, normalizePoints, pointBoundsScale } fro
  */
 
 /**
- * Renders a parsed point cloud into the shared Three.js scene.
+ * Renders a parsed mesh artifact into the shared Three.js scene.
  *
  * @param {import("./state.js").ClientState} state
  * @param {ViewerElements} els
- * @param {import("./mesh-parser.js").PointCloud} pointCloud
+ * @param {import("./mesh-parser.js").MeshData} pointCloud
  * @param {{ jobId?: string | null, frames?: import("./api.js").MeshFrame[] }} [options]
  * @returns {Promise<void>}
  */
@@ -44,12 +44,13 @@ export async function renderPointCloud(state, els, pointCloud, options = {}) {
     group.add(createPointLayer(THREE, fixedPositions, 0xffc857, 0.34));
   }
 
-  const edges = inferEdges(normalized.points);
+  const edges = pointCloud.edges || [];
   if (edges.length > 0) {
     const edgePositions = [];
-    for (const [a, b] of edges) {
-      const p1 = normalized.points[a];
-      const p2 = normalized.points[b];
+    for (const edge of edges) {
+      const p1 = normalized.points[edge.a];
+      const p2 = normalized.points[edge.b];
+      if (!p1 || !p2) continue;
       edgePositions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
     }
 
@@ -63,10 +64,6 @@ export async function renderPointCloud(state, els, pointCloud, options = {}) {
     group.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
   }
 
-  const box = new THREE.Box3(
-    new THREE.Vector3(normalized.min.x, normalized.min.y, normalized.min.z),
-    new THREE.Vector3(normalized.max.x, normalized.max.y, normalized.max.z),
-  );
   const zeroPlane = new THREE.GridHelper(Math.max(normalized.span, 1), 16, 0x4b6f91, 0x263b4d);
   zeroPlane.position.y = 0;
   const zeroPlaneMaterials = Array.isArray(zeroPlane.material) ? zeroPlane.material : [zeroPlane.material];
@@ -75,7 +72,6 @@ export async function renderPointCloud(state, els, pointCloud, options = {}) {
     material.transparent = true;
   }
   group.add(zeroPlane);
-  group.add(new THREE.Box3Helper(box, 0x3d5368));
   group.add(new THREE.AxesHelper(Math.max(normalized.span, 1) * 0.35));
 
   scene.add(group);
@@ -203,7 +199,7 @@ function createPointLayer(THREE, positions, color, size) {
  * Updates cached bounds for the active job so all frames share one viewport scale.
  *
  * @param {import("./state.js").ViewerState} viewer
- * @param {import("./mesh-parser.js").PointCloud} pointCloud
+ * @param {import("./mesh-parser.js").MeshData} pointCloud
  * @param {{ jobId?: string | null, frames?: import("./api.js").MeshFrame[] }} options
  * @returns {{ bounds: import("./mesh-parser.js").PointBounds, shouldFitCamera: boolean }}
  */
@@ -233,7 +229,7 @@ function updateViewerViewport(viewer, pointCloud, options) {
 /**
  * Computes bounds from every loaded frame available for the selected job.
  *
- * @param {import("./mesh-parser.js").PointCloud} pointCloud
+ * @param {import("./mesh-parser.js").MeshData} pointCloud
  * @param {import("./api.js").MeshFrame[]} frames
  * @returns {import("./mesh-parser.js").PointBounds}
  */

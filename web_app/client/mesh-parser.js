@@ -1,15 +1,29 @@
 /**
  * @typedef {{ x: number, y: number, z: number, fixed: boolean, mass: number }} Point3
- * @typedef {{ points: Point3[], metadata: Record<string, string> }} PointCloud
+ * @typedef {{ a: number, b: number, restLength: number, stiffness: number }} Edge
+ * @typedef {{ points: Point3[], edges: Edge[], metadata: Record<string, string> }} MeshData
  * @typedef {{ minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number }} PointBounds
  * @typedef {{ points: Point3[], min: { x: number, y: number, z: number }, max: { x: number, y: number, z: number }, span: number }} NormalizedPointCloud
  */
 
 /**
- * Parses the solver's text `.msh` point-cloud format.
+ * Parses either a mesh-v1 solver artifact or the legacy `.msh` point-cloud format.
  *
  * @param {string} text
- * @returns {PointCloud}
+ * @returns {MeshData}
+ * @throws {Error} When no valid point rows are found.
+ */
+export function parseMeshData(text) {
+  return /^\s*#\s*Format:\s*mesh-v1\b/im.test(text)
+    ? parseMeshSnapshot(text)
+    : parsePointCloud(text);
+}
+
+/**
+ * Parses the legacy text `.msh` point-cloud format.
+ *
+ * @param {string} text
+ * @returns {MeshData}
  * @throws {Error} When no valid point rows are found.
  */
 export function parsePointCloud(text) {
@@ -49,7 +63,90 @@ export function parsePointCloud(text) {
     throw new Error("no valid point rows found");
   }
 
-  return { points, metadata };
+  return { points, edges: [], metadata };
+}
+
+/**
+ * Parses the mesh-v1 text format written by solver snapshots.
+ *
+ * @param {string} text
+ * @returns {MeshData}
+ */
+function parseMeshSnapshot(text) {
+  const points = [];
+  const edges = [];
+  const metadata = {};
+  let section = "";
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (line.startsWith("#")) {
+      const match = line.match(/^#\s*([^:]+):\s*(.+)$/);
+      if (match) {
+        metadata[match[1].trim().toLowerCase()] = match[2].trim();
+      }
+      continue;
+    }
+
+    const lower = line.toLowerCase();
+    if (lower === "vertices" || lower === "edges") {
+      section = lower;
+      continue;
+    }
+
+    const fields = line.split(/\s+/);
+    if (section === "vertices") {
+      if (fields.length < 6) {
+        throw new Error("invalid mesh vertex row");
+      }
+      const index = Number(fields[0]);
+      const x = Number(fields[1]);
+      const y = Number(fields[2]);
+      const z = Number(fields[3]);
+      const mass = Number(fields[5]);
+      if (![index, x, y, z, mass].every(Number.isFinite) || !Number.isInteger(index)) {
+        throw new Error("invalid mesh vertex value");
+      }
+      if (index !== points.length) {
+        throw new Error("mesh vertices must be stored in index order");
+      }
+      points.push({
+        x,
+        y,
+        z,
+        fixed: fields[4] === "1",
+        mass,
+      });
+      continue;
+    }
+
+    if (section === "edges") {
+      if (fields.length < 2) {
+        throw new Error("invalid mesh edge row");
+      }
+      const a = Number(fields[0]);
+      const b = Number(fields[1]);
+      const restLength = fields.length >= 3 ? Number(fields[2]) : 0;
+      const stiffness = fields.length >= 4 ? Number(fields[3]) : 0;
+      if (![a, b, restLength, stiffness].every(Number.isFinite) || !Number.isInteger(a) || !Number.isInteger(b)) {
+        throw new Error("invalid mesh edge value");
+      }
+      edges.push({ a, b, restLength, stiffness });
+    }
+  }
+
+  if (points.length === 0) {
+    throw new Error("no valid mesh vertices found");
+  }
+  for (const edge of edges) {
+    if (edge.a < 0 || edge.a >= points.length || edge.b < 0 || edge.b >= points.length) {
+      throw new Error("mesh edge references an invalid vertex");
+    }
+  }
+
+  return { points, edges, metadata };
 }
 
 /**
@@ -163,10 +260,10 @@ export function normalizePoints(points, referenceBounds = null) {
 }
 
 /**
- * Infers local line segments from nearest neighbors because solver `.msh` outputs store points but not spring endpoints.
+ * Infers local line segments for callers that explicitly want a legacy point-cloud approximation.
  *
  * @param {Point3[]} points
- * @returns {Array<[number, number]>}
+ * @returns {Edge[]}
  */
 export function inferEdges(points) {
   if (points.length < 2 || points.length > 2500) return [];
@@ -202,7 +299,10 @@ export function inferEdges(points) {
     }
   }
 
-  return Array.from(edges, (edge) => edge.split(":").map(Number));
+  return Array.from(edges, (edge) => {
+    const [a, b] = edge.split(":").map(Number);
+    return { a, b, restLength: 0, stiffness: 0 };
+  });
 }
 
 /**
