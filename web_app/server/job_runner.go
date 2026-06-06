@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
 	"mesh3d/web_app/server/solver"
@@ -17,13 +16,8 @@ func RunGoSolver(store *Store, jobID string) (*Job, error) {
 		return nil, nil
 	}
 
-	jobDir := filepath.Join(store.storageDir, "jobs", jobID)
-	inputPath := filepath.Join(jobDir, "input.msh")
-	snapshotDir := filepath.Join(jobDir, "snapshots")
-	finalPath := filepath.Join(jobDir, "final.msh")
-
 	cfg := solver.LoadSolverConfig(job.Config)
-	model, err := solver.NewMeshModelFromPointCloud(inputPath, cfg)
+	model, err := solver.NewMeshModelFromPointCloud(store.jobInputPath(jobID), cfg)
 	if err != nil {
 		store.SetJobStatus(jobID, "failed", err.Error())
 		return getJobAfterRun(store, jobID), err
@@ -31,7 +25,7 @@ func RunGoSolver(store *Store, jobID string) (*Job, error) {
 
 	result, err := solver.RunMesh(model, cfg, func(simTime float64, step int) error {
 		fileName := solver.SnapshotFileName(simTime)
-		path := filepath.Join(snapshotDir, fileName)
+		path := store.jobSnapshotPath(jobID, fileName)
 		if err := model.WritePointCloud(path, simTime, step, false); err != nil {
 			return err
 		}
@@ -50,7 +44,7 @@ func RunGoSolver(store *Store, jobID string) (*Job, error) {
 		return getJobAfterRun(store, jobID), err
 	}
 
-	if err := model.WritePointCloud(finalPath, result.SimTime, result.Step, true); err != nil {
+	if err := model.WritePointCloud(store.jobResultPath(jobID), result.SimTime, result.Step, true); err != nil {
 		store.SetJobStatus(jobID, "failed", err.Error())
 		return getJobAfterRun(store, jobID), err
 	}
@@ -80,8 +74,7 @@ func ReadJobFrames(store *Store, job *Job) ([]JobFrame, error) {
 	}
 
 	if job.ResultURL != "" {
-		path := filepath.Join(store.storageDir, "jobs", job.ID, "final.msh")
-		text, err := os.ReadFile(path)
+		text, err := os.ReadFile(store.jobResultPath(job.ID))
 		if err != nil {
 			return nil, err
 		}

@@ -34,6 +34,46 @@ func NewStore(storageDir string) *Store {
 	}
 }
 
+func (s *Store) uploadMeshPath(uploadID string) string {
+	return filepath.Join(s.storageDir, "uploads", uploadID+".msh")
+}
+
+func (s *Store) uploadMetadataPath(uploadID string) string {
+	return filepath.Join(s.storageDir, "uploads", uploadID+".json")
+}
+
+func (s *Store) jobDir(jobID string) string {
+	return filepath.Join(s.storageDir, "jobs", jobID)
+}
+
+func (s *Store) jobInputPath(jobID string) string {
+	return filepath.Join(s.jobDir(jobID), "input.msh")
+}
+
+func (s *Store) jobConfigPath(jobID string) string {
+	return filepath.Join(s.jobDir(jobID), "config.json")
+}
+
+func (s *Store) jobMetadataPath(jobID string) string {
+	return filepath.Join(s.jobDir(jobID), "job.json")
+}
+
+func (s *Store) jobSnapshotDir(jobID string) string {
+	return filepath.Join(s.jobDir(jobID), "snapshots")
+}
+
+func (s *Store) jobSnapshotPath(jobID, fileName string) string {
+	return filepath.Join(s.jobSnapshotDir(jobID), fileName)
+}
+
+func (s *Store) jobResultPath(jobID string) string {
+	return filepath.Join(s.jobDir(jobID), "final.msh")
+}
+
+func (s *Store) jobArtifactPath(jobID, relPath string) string {
+	return filepath.Join(s.jobDir(jobID), relPath)
+}
+
 // Init creates required storage folders and reloads persisted metadata.
 func (s *Store) Init() error {
 	for _, dir := range []string{
@@ -137,7 +177,7 @@ func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart
 		fileName = "point_cloud.msh"
 	}
 
-	path := filepath.Join(s.storageDir, "uploads", id+".msh")
+	path := s.uploadMeshPath(id)
 	out, err := os.Create(path)
 	if err != nil {
 		return Upload{}, err
@@ -162,7 +202,7 @@ func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart
 	s.uploads[id] = upload
 	s.mu.Unlock()
 
-	if err := writeJSONFile(filepath.Join(s.storageDir, "uploads", id+".json"), upload); err != nil {
+	if err := writeJSONFile(s.uploadMetadataPath(id), upload); err != nil {
 		return Upload{}, err
 	}
 
@@ -182,15 +222,13 @@ func (s *Store) CreateJob(userID, uploadID, name string, config map[string]inter
 	}
 
 	id := newID("job")
-	jobDir := filepath.Join(s.storageDir, "jobs", id)
-	snapshotDir := filepath.Join(jobDir, "snapshots")
-	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+	if err := os.MkdirAll(s.jobSnapshotDir(id), 0755); err != nil {
 		return nil, err
 	}
-	if err := copyFile(upload.Path, filepath.Join(jobDir, "input.msh")); err != nil {
+	if err := copyFile(upload.Path, s.jobInputPath(id)); err != nil {
 		return nil, err
 	}
-	if err := writeJSONFile(filepath.Join(jobDir, "config.json"), config); err != nil {
+	if err := writeJSONFile(s.jobConfigPath(id), config); err != nil {
 		return nil, err
 	}
 
@@ -286,7 +324,7 @@ func (s *Store) DeleteJobForUser(userID, id string) error {
 
 	s.mu.Unlock()
 
-	jobDir := filepath.Join(s.storageDir, "jobs", id)
+	jobDir := s.jobDir(id)
 	if err := os.RemoveAll(jobDir); err != nil {
 		return err
 	}
@@ -361,7 +399,7 @@ func (s *Store) SetResult(jobID string, result solver.SolverResult) {
 
 // saveJobMetadata writes the latest job metadata to disk.
 func (s *Store) saveJobMetadata(job *Job) error {
-	return writeJSONFile(filepath.Join(s.storageDir, "jobs", job.ID, "job.json"), job)
+	return writeJSONFile(s.jobMetadataPath(job.ID), job)
 }
 
 func (s *Store) saveUsers(users []*User) error {
@@ -403,7 +441,7 @@ func (s *Store) loadMetadata() error {
 			log.Printf("skip upload metadata %s: %v", path, err)
 			continue
 		}
-		upload.Path = filepath.Join(s.storageDir, "uploads", upload.ID+".msh")
+		upload.Path = s.uploadMeshPath(upload.ID)
 		if _, err := os.Stat(upload.Path); err != nil {
 			continue
 		}
@@ -419,6 +457,17 @@ func (s *Store) loadMetadata() error {
 		if err := readJSONFile(path, &job); err != nil {
 			log.Printf("skip job metadata %s: %v", path, err)
 			continue
+		}
+		if job.UserID == "" {
+			upload, ok := s.uploads[job.UploadID]
+			if !ok || upload.UserID == "" {
+				log.Printf("job metadata %s has no userId and upload owner could not be found", path)
+			} else {
+				job.UserID = upload.UserID
+				if err := s.saveJobMetadata(&job); err != nil {
+					log.Printf("could not backfill userId for job metadata %s: %v", path, err)
+				}
+			}
 		}
 		s.jobs[job.ID] = &job
 	}

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -82,7 +81,7 @@ func TestJobsAndResultsAreUserScoped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create job: %v", err)
 	}
-	resultPath := filepath.Join(app.store.storageDir, "jobs", job.ID, "final.msh")
+	resultPath := app.store.jobResultPath(job.ID)
 	if err := os.WriteFile(resultPath, []byte("mesh result"), 0644); err != nil {
 		t.Fatalf("write result: %v", err)
 	}
@@ -128,6 +127,51 @@ func TestJobsAndResultsAreUserScoped(t *testing.T) {
 
 }
 
+func TestLoadMetadataBackfillsJobUserFromUpload(t *testing.T) {
+	storageDir := t.TempDir()
+	store := NewStore(storageDir)
+	if err := store.Init(); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+	alice, err := store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+
+	upload := saveTestUpload(t, store, alice.ID)
+	job, err := store.CreateJob(alice.ID, upload.ID, "legacy job", map[string]interface{}{"maxSimTime": 1})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	legacyJob := *job
+	legacyJob.UserID = ""
+	if err := writeJSONFile(store.jobMetadataPath(job.ID), legacyJob); err != nil {
+		t.Fatalf("write legacy job metadata: %v", err)
+	}
+
+	reloaded := NewStore(storageDir)
+	if err := reloaded.Init(); err != nil {
+		t.Fatalf("reload store: %v", err)
+	}
+
+	got, ok := reloaded.GetJobForUser(alice.ID, job.ID)
+	if !ok {
+		t.Fatalf("reloaded legacy job was not owned by alice")
+	}
+	if got.UserID != alice.ID {
+		t.Fatalf("reloaded job user id = %q, want %q", got.UserID, alice.ID)
+	}
+
+	var persisted Job
+	if err := readJSONFile(reloaded.jobMetadataPath(job.ID), &persisted); err != nil {
+		t.Fatalf("read backfilled job metadata: %v", err)
+	}
+	if persisted.UserID != alice.ID {
+		t.Fatalf("persisted job user id = %q, want %q", persisted.UserID, alice.ID)
+	}
+}
+
 func TestDeleteJobIsOwnedAndOnlyForFinishedJobs(t *testing.T) {
 	app, handler := newTestApp(t)
 	alice, err := app.store.CreateUser("alice", "password123")
@@ -144,7 +188,7 @@ func TestDeleteJobIsOwnedAndOnlyForFinishedJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create job: %v", err)
 	}
-	jobDir := filepath.Join(app.store.storageDir, "jobs", job.ID)
+	jobDir := app.store.jobDir(job.ID)
 
 	bobDelete := request(handler, http.MethodDelete, "/api/jobs/"+job.ID, nil, authCookie(t, app, bob))
 	if bobDelete.Code != http.StatusNotFound {

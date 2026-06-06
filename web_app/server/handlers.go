@@ -282,7 +282,7 @@ func (a *App) serveJobFile(w http.ResponseWriter, r *http.Request, userID, jobID
 		return
 	}
 
-	path := filepath.Join(a.store.storageDir, "jobs", jobID, relPath)
+	path := a.store.jobArtifactPath(jobID, relPath)
 	if _, err := os.Stat(path); err != nil {
 		writeError(w, http.StatusNotFound, "file not found")
 		return
