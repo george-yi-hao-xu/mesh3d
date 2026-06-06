@@ -11,3 +11,8 @@
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# Mesh3D web app runtime storage
+web_app/server/storage/
+
+build/
