@@ -190,14 +190,28 @@ func (a *App) handleJobs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		go RunGoSolver(a.store, job.ID)
-		writeJSON(w, http.StatusCreated, job)
+		job, runErr := RunGoSolver(a.store, job.ID)
+		if job == nil {
+			writeError(w, http.StatusInternalServerError, "job disappeared while running")
+			return
+		}
+		if runErr != nil {
+			writeJSON(w, http.StatusCreated, JobCreateResponse{Job: job, Frames: nil})
+			return
+		}
+
+		frames, err := ReadJobFrames(a.store, job)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusCreated, JobCreateResponse{Job: job, Frames: frames})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
-// handleJobRoutes dispatches nested job routes such as events, snapshots, and result files.
+// handleJobRoutes dispatches nested job routes such as job metadata, snapshots, and result files.
 func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	parts := splitPath(strings.TrimPrefix(r.URL.Path, "/api/jobs/"))
@@ -212,22 +226,34 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 1 {
-		if r.Method != http.MethodGet {
+		switch r.Method {
+		case http.MethodGet:
+			job, ok := a.store.GetJobForUser(user.ID, jobID)
+			if !ok {
+				writeError(w, http.StatusNotFound, "job not found")
+				return
+			}
+			writeJSON(w, http.StatusOK, job)
+		case http.MethodDelete:
+			if err := a.store.DeleteJobForUser(user.ID, jobID); err != nil {
+				switch err {
+				case errJobNotFound:
+					writeError(w, http.StatusNotFound, err.Error())
+				case errJobNotDeletable:
+					writeError(w, http.StatusConflict, err.Error())
+				default:
+					writeError(w, http.StatusInternalServerError, err.Error())
+				}
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
 		}
-		job, ok := a.store.GetJobForUser(user.ID, jobID)
-		if !ok {
-			writeError(w, http.StatusNotFound, "job not found")
-			return
-		}
-		writeJSON(w, http.StatusOK, job)
 		return
 	}
 
 	switch parts[1] {
-	case "events":
-		a.handleJobEvents(w, r, user.ID, jobID)
 	case "snapshots":
 		if len(parts) != 3 {
 			writeError(w, http.StatusNotFound, "snapshot not found")
@@ -242,54 +268,6 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 		a.serveJobFile(w, r, user.ID, jobID, "final.msh")
 	default:
 		writeError(w, http.StatusNotFound, "not found")
-	}
-}
-
-// handleJobEvents streams sparse job updates with Server-Sent Events.
-func (a *App) handleJobEvents(w http.ResponseWriter, r *http.Request, userID, jobID string) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	if _, ok := a.store.GetJobForUser(userID, jobID); !ok {
-		writeError(w, http.StatusNotFound, "job not found")
-		return
-	}
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "streaming unsupported")
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	ch := a.store.Subscribe(jobID)
-	defer a.store.Unsubscribe(jobID, ch)
-
-	if job, ok := a.store.GetJobForUser(userID, jobID); ok {
-		writeSSE(w, Event{Type: "job", JobID: jobID, Job: job})
-		for _, snapshot := range job.Snapshots {
-			s := snapshot
-			writeSSE(w, Event{Type: "snapshot", JobID: jobID, Snapshot: &s})
-		}
-		flusher.Flush()
-	}
-
-	notify := r.Context().Done()
-	for {
-		select {
-		case <-notify:
-			return
-		case event := <-ch:
-			writeSSE(w, event)
-			flusher.Flush()
-			if event.Type == "done" || event.Type == "failed" {
-				return
-			}
-		}
 	}
 }
 

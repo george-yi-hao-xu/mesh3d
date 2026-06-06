@@ -34,7 +34,7 @@ func main() {
 	// Browser creates and lists solver jobs here after an upload has been stored.
 	mux.HandleFunc("/api/jobs", app.requireAuth(app.handleJobs))
 
-	// Browser reads one job, listens for job events, and downloads checkpoint/final .msh files here.
+	// Browser reads, deletes, and downloads checkpoint/final files for one stored job here.
 	mux.HandleFunc("/api/jobs/", app.requireAuth(app.handleJobRoutes))
 
 	// Serve the static frontend files from clientDir.

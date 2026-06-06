@@ -108,9 +108,13 @@
             <h2 id="activeJobTitle">No job selected</h2>
             <p id="activeJobMeta">Run a solve to see checkpoints.</p>
           </div>
-          <a id="downloadLink" class="download hidden" href="#">Download</a>
+          <div class="viewer-actions">
+            <a id="downloadLink" class="download hidden" href="#">Download</a>
+            <button id="deleteJobButton" class="danger hidden" type="button">Delete</button>
+          </div>
         </div>
 
+        <p id="activeInputName" class="input-name hidden"></p>
         <div id="checkpointTabs" class="tabs"></div>
         <div id="meshCanvas" class="mesh-canvas">
           <div id="meshCanvasMessage" class="mesh-message">No mesh loaded.</div>
@@ -121,6 +125,18 @@
         </details>
       </section>
     </main>
+
+    <div id="deleteOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="deleteOverlayTitle">
+      <div class="overlay-card">
+        <h2 id="deleteOverlayTitle">Delete job?</h2>
+        <p id="deleteOverlayBody">This removes the job and its saved outputs.</p>
+        <p id="deleteOverlayError" class="overlay-error hidden"></p>
+        <div class="overlay-actions">
+          <button id="deleteOverlayCancel" class="secondary" type="button">Cancel</button>
+          <button id="deleteOverlayConfirm" class="danger" type="button">Delete</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="./app.js"></script>
   </body>

@@ -1,3 +1,16 @@
+/**
+ * @typedef {{ x: number, y: number, z: number, fixed: boolean, mass: number }} Point3
+ * @typedef {{ points: Point3[], metadata: Record<string, string> }} PointCloud
+ * @typedef {{ points: Point3[], min: { x: number, y: number, z: number }, max: { x: number, y: number, z: number }, span: number }} NormalizedPointCloud
+ */
+
+/**
+ * Parses the solver's text `.msh` point-cloud format.
+ *
+ * @param {string} text
+ * @returns {PointCloud}
+ * @throws {Error} When no valid point rows are found.
+ */
 export function parsePointCloud(text) {
   const points = [];
   const metadata = {};
@@ -38,6 +51,12 @@ export function parsePointCloud(text) {
   return { points, metadata };
 }
 
+/**
+ * Scales points into a stable Three.js viewing range while preserving the true `(0, 0, 0)` origin.
+ *
+ * @param {Point3[]} points
+ * @returns {NormalizedPointCloud}
+ */
 export function normalizePoints(points) {
   const bounds = points.reduce((acc, point) => ({
     minX: Math.min(acc.minX, point.x),
@@ -106,6 +125,12 @@ export function normalizePoints(points) {
   };
 }
 
+/**
+ * Infers local line segments from nearest neighbors because solver `.msh` outputs store points but not spring endpoints.
+ *
+ * @param {Point3[]} points
+ * @returns {Array<[number, number]>}
+ */
 export function inferEdges(points) {
   if (points.length < 2 || points.length > 2500) return [];
 
@@ -143,6 +168,13 @@ export function inferEdges(points) {
   return Array.from(edges, (edge) => edge.split(":").map(Number));
 }
 
+/**
+ * Computes squared Euclidean distance without allocating temporary vectors.
+ *
+ * @param {Point3} a
+ * @param {Point3} b
+ * @returns {number}
+ */
 function squaredDistance(a, b) {
   return ((a.x - b.x) ** 2) + ((a.y - b.y) ** 2) + ((a.z - b.z) ** 2);
 }

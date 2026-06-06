@@ -1,5 +1,20 @@
 import { inferEdges, normalizePoints } from "./mesh-parser.js";
 
+/**
+ * @typedef {{
+ *   meshCanvas: HTMLElement,
+ *   meshCanvasMessage: HTMLElement
+ * }} ViewerElements
+ */
+
+/**
+ * Renders a parsed point cloud into the shared Three.js scene.
+ *
+ * @param {import("./state.js").ClientState} state
+ * @param {ViewerElements} els
+ * @param {import("./mesh-parser.js").PointCloud} pointCloud
+ * @returns {Promise<void>}
+ */
 export async function renderPointCloud(state, els, pointCloud) {
   const viewer = await ensureViewer(state, els);
   if (!viewer) return;
@@ -67,11 +82,26 @@ export async function renderPointCloud(state, els, pointCloud) {
   setMeshMessage(els, "", true);
 }
 
+/**
+ * Updates the overlay message shown on top of the mesh canvas.
+ *
+ * @param {ViewerElements} els
+ * @param {string} message
+ * @param {boolean} [hidden]
+ * @returns {void}
+ */
 export function setMeshMessage(els, message, hidden = false) {
   els.meshCanvasMessage.textContent = message;
   els.meshCanvasMessage.classList.toggle("hidden", hidden);
 }
 
+/**
+ * Returns the existing viewer or lazily creates it on first render.
+ *
+ * @param {import("./state.js").ClientState} state
+ * @param {ViewerElements} els
+ * @returns {Promise<import("./state.js").ViewerState | null>}
+ */
 async function ensureViewer(state, els) {
   if (state.viewer.disabled) {
     setMeshMessage(els, "3D view unavailable. Raw mesh text is shown below.");
@@ -90,6 +120,13 @@ async function ensureViewer(state, els) {
   return state.viewer.ready;
 }
 
+/**
+ * Creates the Three.js renderer, scene, camera, controls, lights, resize observer, and render loop.
+ *
+ * @param {import("./state.js").ClientState} state
+ * @param {ViewerElements} els
+ * @returns {Promise<import("./state.js").ViewerState>}
+ */
 async function setupViewer(state, els) {
   setMeshMessage(els, "Loading Three.js.");
   const [THREE, { OrbitControls }] = await Promise.all([
@@ -137,6 +174,15 @@ async function setupViewer(state, els) {
   return state.viewer;
 }
 
+/**
+ * Creates one point-cloud layer for either fixed or moving particles.
+ *
+ * @param {any} THREE
+ * @param {number[]} positions
+ * @param {number} color
+ * @param {number} size
+ * @returns {any}
+ */
 function createPointLayer(THREE, positions, color, size) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -148,6 +194,13 @@ function createPointLayer(THREE, positions, color, size) {
   return new THREE.Points(geometry, material);
 }
 
+/**
+ * Frames the scene while keeping orbit controls centered on the true solver origin.
+ *
+ * @param {import("./state.js").ViewerState} viewer
+ * @param {any} box
+ * @returns {void}
+ */
 function fitCameraToBox(viewer, box) {
   const { THREE, camera, controls } = viewer;
   const size = new THREE.Vector3();
@@ -170,6 +223,13 @@ function fitCameraToBox(viewer, box) {
   controls.update();
 }
 
+/**
+ * Resizes the WebGL renderer to the current canvas container dimensions.
+ *
+ * @param {import("./state.js").ViewerState} viewer
+ * @param {ViewerElements} els
+ * @returns {void}
+ */
 function resizeViewer(viewer, els) {
   if (!viewer.renderer || !viewer.camera) return;
 
@@ -182,6 +242,12 @@ function resizeViewer(viewer, els) {
   viewer.renderer.setSize(width, height, false);
 }
 
+/**
+ * Disposes geometries and materials before replacing the previous mesh group.
+ *
+ * @param {any} object
+ * @returns {void}
+ */
 function disposeObject(object) {
   object.traverse((child) => {
     if (child.geometry) child.geometry.dispose();

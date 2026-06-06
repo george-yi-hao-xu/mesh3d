@@ -37,12 +37,12 @@ POST /api/uploads
 POST /api/jobs
 GET  /api/jobs
 GET  /api/jobs/{id}
-GET  /api/jobs/{id}/events
+DELETE /api/jobs/{id}
 GET  /api/jobs/{id}/snapshots/{file}
 GET  /api/jobs/{id}/result
 ```
 
-Progress uses sparse checkpoint events. The client does not stream every physics frame; it receives notifications when `5s`, `10s`, later checkpoints, and final results are ready.
+Job creation runs the solver and returns the completed job plus all checkpoint/final frames in one response. Existing job files can still be downloaded through the snapshot and result endpoints.
 
 ## Request Flow
 
@@ -116,36 +116,14 @@ calls store.CreateJob(...)
 creates storage/jobs/{jobId}/
 copies input.msh into the job folder
 writes config.json
-starts the solver in a background goroutine
-returns job JSON immediately
+runs the solver
+reads checkpoint and final mesh files
+returns job JSON plus frame mesh text
 ```
 
-The solver is started with:
+### 4. Solver Runs
 
-```go
-go RunGoSolver(a.store, job.ID)
-```
-
-That `go` keyword means the solver runs in the background, so the HTTP response does not wait for the whole simulation.
-
-### 4. Browser Listens for Checkpoints
-
-```text
-GET /api/jobs/{jobId}/events
-```
-
-The server calls `handleJobEvents`.
-
-This opens a Server-Sent Events stream. The connection stays open while the job runs, and the server sends messages such as:
-
-```json
-{"type":"snapshot","jobId":"job_xxx"}
-{"type":"done","jobId":"job_xxx"}
-```
-
-### 5. Solver Runs
-
-The background goroutine calls `RunGoSolver` in `server/job_runner.go`.
+The job handler calls `RunGoSolver` in `server/job_runner.go`.
 
 It:
 
@@ -157,7 +135,6 @@ runs physics
 writes checkpoint .msh files
 writes final.msh
 updates job metadata
-publishes events to active browser subscribers
 ```
 
 At each checkpoint, the server writes:
@@ -184,9 +161,11 @@ Then it calls:
 store.SetResult(...)
 ```
 
-### 6. Browser Fetches a Result File
+After the solver finishes, `ReadJobFrames` loads the generated `.msh` text and includes it in the `POST /api/jobs` response. The browser stores those frames on the selected job and shows the final frame by default.
 
-After receiving a checkpoint event, the browser requests the actual `.msh` file:
+### 5. Browser Fetches a Result File
+
+For stored jobs or downloads, the browser can still request an existing `.msh` file:
 
 ```text
 GET /api/jobs/{jobId}/snapshots/{file}
@@ -210,16 +189,12 @@ browser upload
 browser create job
   -> Go handler
   -> Store creates job folder
-  -> solver goroutine starts
-
-browser opens event stream
-  -> Go keeps connection open
+  -> solver runs inside the request
 
 solver creates checkpoints
   -> Store records snapshot
-  -> Store publishes event
-  -> browser receives event
-  -> browser fetches .msh file
+  -> server reads all generated frames
+  -> browser receives job + frames
 ```
 
 ## Solver Notes
@@ -238,7 +213,7 @@ Mesh physics code lives in:
 server/solver/mesh/
 ```
 
-The server-side job runner that connects solver output to stored snapshots and SSE events lives in:
+The server-side job runner that connects solver output to stored snapshots and bundled frame responses lives in:
 
 ```text
 server/job_runner.go

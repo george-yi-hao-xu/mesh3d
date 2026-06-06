@@ -1,19 +1,20 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"time"
 
 	"mesh3d/web_app/server/solver"
 )
 
-// RunGoSolver connects a stored job to the solver package and publishes checkpoint events.
-func RunGoSolver(store *Store, jobID string) {
+// RunGoSolver connects a stored job to the solver package and records checkpoint files.
+func RunGoSolver(store *Store, jobID string) (*Job, error) {
 	store.SetJobStatus(jobID, "running", "")
 
 	job, ok := store.GetJob(jobID)
 	if !ok {
-		return
+		return nil, nil
 	}
 
 	jobDir := filepath.Join(store.storageDir, "jobs", jobID)
@@ -25,7 +26,7 @@ func RunGoSolver(store *Store, jobID string) {
 	model, err := solver.NewMeshModelFromPointCloud(inputPath, cfg)
 	if err != nil {
 		store.SetJobStatus(jobID, "failed", err.Error())
-		return
+		return getJobAfterRun(store, jobID), err
 	}
 
 	result, err := solver.RunMesh(model, cfg, func(simTime float64, step int) error {
@@ -46,12 +47,58 @@ func RunGoSolver(store *Store, jobID string) {
 	})
 	if err != nil {
 		store.SetJobStatus(jobID, "failed", err.Error())
-		return
+		return getJobAfterRun(store, jobID), err
 	}
 
 	if err := model.WritePointCloud(finalPath, result.SimTime, result.Step, true); err != nil {
 		store.SetJobStatus(jobID, "failed", err.Error())
-		return
+		return getJobAfterRun(store, jobID), err
 	}
 	store.SetResult(jobID, result)
+	return getJobAfterRun(store, jobID), nil
+}
+
+// ReadJobFrames loads checkpoint and final mesh text for a completed job response.
+func ReadJobFrames(store *Store, job *Job) ([]JobFrame, error) {
+	if job == nil {
+		return nil, nil
+	}
+
+	frames := make([]JobFrame, 0, len(job.Snapshots)+1)
+	for _, snapshot := range job.Snapshots {
+		text, err := os.ReadFile(snapshot.Path)
+		if err != nil {
+			return nil, err
+		}
+		frames = append(frames, JobFrame{
+			Label:   snapshot.Label,
+			URL:     snapshot.URL,
+			Text:    string(text),
+			SimTime: snapshot.SimTime,
+			Step:    snapshot.Step,
+		})
+	}
+
+	if job.ResultURL != "" {
+		path := filepath.Join(store.storageDir, "jobs", job.ID, "final.msh")
+		text, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		frames = append(frames, JobFrame{
+			Label:   "Final",
+			URL:     job.ResultURL,
+			Text:    string(text),
+			IsFinal: true,
+			SimTime: job.FinalTime,
+			Step:    job.FinalStep,
+		})
+	}
+
+	return frames, nil
+}
+
+func getJobAfterRun(store *Store, jobID string) *Job {
+	job, _ := store.GetJob(jobID)
+	return job
 }

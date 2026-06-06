@@ -69,13 +69,6 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// writeSSE writes one Server-Sent Event frame.
-func writeSSE(w io.Writer, event Event) {
-	body, _ := json.Marshal(event)
-	fmt.Fprintf(w, "event: %s\n", event.Type)
-	fmt.Fprintf(w, "data: %s\n\n", body)
-}
-
 // newID creates a random id with the requested prefix.
 func newID(prefix string) string {
 	var buf [8]byte

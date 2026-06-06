@@ -50,23 +50,27 @@ type Job struct {
 	FinishedAt *time.Time             `json:"finishedAt,omitempty"`
 }
 
-type Event struct {
-	Type     string      `json:"type"`
-	JobID    string      `json:"jobId"`
-	Snapshot *Snapshot   `json:"snapshot,omitempty"`
-	Job      *Job        `json:"job,omitempty"`
-	Error    string      `json:"error,omitempty"`
-	Payload  interface{} `json:"payload,omitempty"`
+type JobFrame struct {
+	Label   string  `json:"label"`
+	URL     string  `json:"url"`
+	Text    string  `json:"text"`
+	IsFinal bool    `json:"isFinal"`
+	SimTime float64 `json:"simTime,omitempty"`
+	Step    int     `json:"step,omitempty"`
+}
+
+type JobCreateResponse struct {
+	Job    *Job       `json:"job"`
+	Frames []JobFrame `json:"frames"`
 }
 
 type Store struct {
-	mu          sync.Mutex
-	storageDir  string
-	users       map[string]*User
-	usernames   map[string]string
-	uploads     map[string]Upload
-	jobs        map[string]*Job
-	subscribers map[string]map[chan Event]struct{}
+	mu         sync.Mutex
+	storageDir string
+	users      map[string]*User
+	usernames  map[string]string
+	uploads    map[string]Upload
+	jobs       map[string]*Job
 }
 
 type App struct {

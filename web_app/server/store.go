@@ -18,15 +18,19 @@ import (
 
 var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
+var (
+	errJobNotFound     = errors.New("job not found")
+	errJobNotDeletable = errors.New("job is not finished")
+)
+
 // NewStore creates the in-memory indexes around the configured storage root.
 func NewStore(storageDir string) *Store {
 	return &Store{
-		storageDir:  storageDir,
-		users:       make(map[string]*User),
-		usernames:   make(map[string]string),
-		uploads:     make(map[string]Upload),
-		jobs:        make(map[string]*Job),
-		subscribers: make(map[string]map[chan Event]struct{}),
+		storageDir: storageDir,
+		users:      make(map[string]*User),
+		usernames:  make(map[string]string),
+		uploads:    make(map[string]Upload),
+		jobs:       make(map[string]*Job),
 	}
 }
 
@@ -267,7 +271,33 @@ func (s *Store) GetJobForUser(userID, id string) (*Job, bool) {
 	return cloneJob(job), true
 }
 
-// SetJobStatus updates a job state and broadcasts the change.
+// DeleteJobForUser removes a finished job and its stored artifacts when it belongs to the requested user.
+func (s *Store) DeleteJobForUser(userID, id string) error {
+	s.mu.Lock()
+	job, ok := s.jobs[id]
+	if !ok || job.UserID != userID {
+		s.mu.Unlock()
+		return errJobNotFound
+	}
+	if job.Status == "queued" || job.Status == "running" {
+		s.mu.Unlock()
+		return errJobNotDeletable
+	}
+
+	s.mu.Unlock()
+
+	jobDir := filepath.Join(s.storageDir, "jobs", id)
+	if err := os.RemoveAll(jobDir); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	delete(s.jobs, id)
+	s.mu.Unlock()
+	return nil
+}
+
+// SetJobStatus updates a job state.
 func (s *Store) SetJobStatus(id, status, msg string) {
 	s.mu.Lock()
 	job, ok := s.jobs[id]
@@ -288,14 +318,9 @@ func (s *Store) SetJobStatus(id, status, msg string) {
 	s.mu.Unlock()
 
 	_ = s.saveJobMetadata(cloned)
-	eventType := status
-	if status == "running" {
-		eventType = "job"
-	}
-	s.Publish(id, Event{Type: eventType, JobID: id, Job: cloned, Error: msg})
 }
 
-// AddSnapshot records a checkpoint artifact and notifies subscribed clients.
+// AddSnapshot records a checkpoint artifact.
 func (s *Store) AddSnapshot(jobID string, snapshot Snapshot) {
 	s.mu.Lock()
 	job, ok := s.jobs[jobID]
@@ -309,7 +334,6 @@ func (s *Store) AddSnapshot(jobID string, snapshot Snapshot) {
 	s.mu.Unlock()
 
 	_ = s.saveJobMetadata(cloned)
-	s.Publish(jobID, Event{Type: "snapshot", JobID: jobID, Snapshot: &snapshot})
 }
 
 // SetResult marks a job finished and stores the solver outcome.
@@ -333,41 +357,6 @@ func (s *Store) SetResult(jobID string, result solver.SolverResult) {
 	s.mu.Unlock()
 
 	_ = s.saveJobMetadata(cloned)
-	s.Publish(jobID, Event{Type: "done", JobID: jobID, Job: cloned})
-}
-
-// Subscribe registers a buffered event channel for a job.
-func (s *Store) Subscribe(jobID string) chan Event {
-	ch := make(chan Event, 16)
-	s.mu.Lock()
-	if s.subscribers[jobID] == nil {
-		s.subscribers[jobID] = make(map[chan Event]struct{})
-	}
-	s.subscribers[jobID][ch] = struct{}{}
-	s.mu.Unlock()
-	return ch
-}
-
-// Unsubscribe removes and closes a job event channel.
-func (s *Store) Unsubscribe(jobID string, ch chan Event) {
-	s.mu.Lock()
-	if subs := s.subscribers[jobID]; subs != nil {
-		delete(subs, ch)
-	}
-	close(ch)
-	s.mu.Unlock()
-}
-
-// Publish sends an event to every active subscriber for a job.
-func (s *Store) Publish(jobID string, event Event) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for ch := range s.subscribers[jobID] {
-		select {
-		case ch <- event:
-		default:
-		}
-	}
 }
 
 // saveJobMetadata writes the latest job metadata to disk.

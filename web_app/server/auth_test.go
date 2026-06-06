@@ -126,9 +126,57 @@ func TestJobsAndResultsAreUserScoped(t *testing.T) {
 		t.Fatalf("bob result status = %d, want %d", bobResult.Code, http.StatusNotFound)
 	}
 
-	bobEvents := request(handler, http.MethodGet, "/api/jobs/"+job.ID+"/events", nil, authCookie(t, app, bob))
-	if bobEvents.Code != http.StatusNotFound {
-		t.Fatalf("bob events status = %d, want %d", bobEvents.Code, http.StatusNotFound)
+}
+
+func TestDeleteJobIsOwnedAndOnlyForFinishedJobs(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	bob, err := app.store.CreateUser("bob", "password123")
+	if err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	upload := saveTestUpload(t, app.store, alice.ID)
+	job, err := app.store.CreateJob(alice.ID, upload.ID, "alice job", map[string]interface{}{"maxSimTime": 1})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	jobDir := filepath.Join(app.store.storageDir, "jobs", job.ID)
+
+	bobDelete := request(handler, http.MethodDelete, "/api/jobs/"+job.ID, nil, authCookie(t, app, bob))
+	if bobDelete.Code != http.StatusNotFound {
+		t.Fatalf("bob delete status = %d, want %d", bobDelete.Code, http.StatusNotFound)
+	}
+
+	queuedDelete := request(handler, http.MethodDelete, "/api/jobs/"+job.ID, nil, authCookie(t, app, alice))
+	if queuedDelete.Code != http.StatusConflict {
+		t.Fatalf("queued delete status = %d, want %d", queuedDelete.Code, http.StatusConflict)
+	}
+
+	app.store.SetJobStatus(job.ID, "failed", "simulated failure")
+
+	doneDelete := request(handler, http.MethodDelete, "/api/jobs/"+job.ID, nil, authCookie(t, app, alice))
+	if doneDelete.Code != http.StatusNoContent {
+		t.Fatalf("done delete status = %d, want %d", doneDelete.Code, http.StatusNoContent)
+	}
+
+	if _, err := os.Stat(jobDir); !os.IsNotExist(err) {
+		t.Fatalf("job directory still exists after delete: %v", err)
+	}
+
+	listRes := request(handler, http.MethodGet, "/api/jobs", nil, authCookie(t, app, alice))
+	if listRes.Code != http.StatusOK {
+		t.Fatalf("alice list after delete status = %d, want %d", listRes.Code, http.StatusOK)
+	}
+	var jobs []*Job
+	if err := json.Unmarshal(listRes.Body.Bytes(), &jobs); err != nil {
+		t.Fatalf("decode list after delete: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("alice jobs after delete = %+v, want none", jobs)
 	}
 }
 
