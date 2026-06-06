@@ -1,16 +1,134 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // handleHealth reports whether the server process is reachable.
 func (a *App) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (a *App) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	var req authRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	user, err := a.store.CreateUser(req.Username, req.Password)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	now := time.Now().UTC()
+	token, err := createJWT(a.jwtSecret, user, now)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not create token")
+		return
+	}
+	setAuthCookie(w, r, token, now.Add(tokenTTL))
+	writeJSON(w, http.StatusCreated, map[string]userResponse{"user": userToResponse(user)})
+}
+
+func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	var req authRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	user, err := a.store.AuthenticateUser(req.Username, req.Password)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	now := time.Now().UTC()
+	token, err := createJWT(a.jwtSecret, user, now)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not create token")
+		return
+	}
+	setAuthCookie(w, r, token, now.Add(tokenTTL))
+	writeJSON(w, http.StatusOK, map[string]userResponse{"user": userToResponse(user)})
+}
+
+func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	clearAuthCookie(w, r)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (a *App) handleMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	user, ok := a.authenticateRequest(r)
+	if !ok {
+		clearAuthCookie(w, r)
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]userResponse{"user": userToResponse(user)})
+}
+
+func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := a.authenticateRequest(r)
+		if !ok {
+			clearAuthCookie(w, r)
+			writeError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		ctx := context.WithValue(r.Context(), userContextKey, user)
+		next(w, r.WithContext(ctx))
+	}
+}
+
+func (a *App) authenticateRequest(r *http.Request) (*User, bool) {
+	cookie, err := r.Cookie(authCookieName)
+	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+		return nil, false
+	}
+
+	claims, err := verifyJWT(a.jwtSecret, cookie.Value, time.Now().UTC())
+	if err != nil {
+		return nil, false
+	}
+	user, ok := a.store.GetUser(claims.Subject)
+	if !ok || user.Username != claims.Username {
+		return nil, false
+	}
+	return user, true
+}
+
+func currentUser(r *http.Request) *User {
+	user, _ := r.Context().Value(userContextKey).(*User)
+	return user
 }
 
 // handleUploads accepts a point-cloud file and stores it as an upload artifact.
@@ -32,7 +150,8 @@ func (a *App) handleUploads(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	upload, err := a.store.SaveUpload(file, header)
+	user := currentUser(r)
+	upload, err := a.store.SaveUpload(user.ID, file, header)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -43,12 +162,14 @@ func (a *App) handleUploads(w http.ResponseWriter, r *http.Request) {
 
 // handleJobs lists existing jobs or creates a new solver job from an upload.
 func (a *App) handleJobs(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, a.store.ListJobs())
+		writeJSON(w, http.StatusOK, a.store.ListJobs(user.ID))
 	case http.MethodPost:
 		var req struct {
 			UploadID string                 `json:"uploadId"`
+			Name     string                 `json:"name"`
 			Config   map[string]interface{} `json:"config"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -63,7 +184,7 @@ func (a *App) handleJobs(w http.ResponseWriter, r *http.Request) {
 			req.Config = make(map[string]interface{})
 		}
 
-		job, err := a.store.CreateJob(req.UploadID, req.Config)
+		job, err := a.store.CreateJob(user.ID, req.UploadID, req.Name, req.Config)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -78,6 +199,7 @@ func (a *App) handleJobs(w http.ResponseWriter, r *http.Request) {
 
 // handleJobRoutes dispatches nested job routes such as events, snapshots, and result files.
 func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
 	parts := splitPath(strings.TrimPrefix(r.URL.Path, "/api/jobs/"))
 	if len(parts) == 0 {
 		writeError(w, http.StatusNotFound, "not found")
@@ -94,7 +216,7 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		job, ok := a.store.GetJob(jobID)
+		job, ok := a.store.GetJobForUser(user.ID, jobID)
 		if !ok {
 			writeError(w, http.StatusNotFound, "job not found")
 			return
@@ -105,7 +227,7 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 
 	switch parts[1] {
 	case "events":
-		a.handleJobEvents(w, r, jobID)
+		a.handleJobEvents(w, r, user.ID, jobID)
 	case "snapshots":
 		if len(parts) != 3 {
 			writeError(w, http.StatusNotFound, "snapshot not found")
@@ -115,21 +237,21 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid snapshot file")
 			return
 		}
-		a.serveJobFile(w, r, jobID, filepath.Join("snapshots", parts[2]))
+		a.serveJobFile(w, r, user.ID, jobID, filepath.Join("snapshots", parts[2]))
 	case "result":
-		a.serveJobFile(w, r, jobID, "final.msh")
+		a.serveJobFile(w, r, user.ID, jobID, "final.msh")
 	default:
 		writeError(w, http.StatusNotFound, "not found")
 	}
 }
 
 // handleJobEvents streams sparse job updates with Server-Sent Events.
-func (a *App) handleJobEvents(w http.ResponseWriter, r *http.Request, jobID string) {
+func (a *App) handleJobEvents(w http.ResponseWriter, r *http.Request, userID, jobID string) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if _, ok := a.store.GetJob(jobID); !ok {
+	if _, ok := a.store.GetJobForUser(userID, jobID); !ok {
 		writeError(w, http.StatusNotFound, "job not found")
 		return
 	}
@@ -147,7 +269,7 @@ func (a *App) handleJobEvents(w http.ResponseWriter, r *http.Request, jobID stri
 	ch := a.store.Subscribe(jobID)
 	defer a.store.Unsubscribe(jobID, ch)
 
-	if job, ok := a.store.GetJob(jobID); ok {
+	if job, ok := a.store.GetJobForUser(userID, jobID); ok {
 		writeSSE(w, Event{Type: "job", JobID: jobID, Job: job})
 		for _, snapshot := range job.Snapshots {
 			s := snapshot
@@ -172,12 +294,12 @@ func (a *App) handleJobEvents(w http.ResponseWriter, r *http.Request, jobID stri
 }
 
 // serveJobFile serves generated job artifacts from the job storage directory.
-func (a *App) serveJobFile(w http.ResponseWriter, r *http.Request, jobID string, relPath string) {
+func (a *App) serveJobFile(w http.ResponseWriter, r *http.Request, userID, jobID string, relPath string) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if _, ok := a.store.GetJob(jobID); !ok {
+	if _, ok := a.store.GetJobForUser(userID, jobID); !ok {
 		writeError(w, http.StatusNotFound, "job not found")
 		return
 	}

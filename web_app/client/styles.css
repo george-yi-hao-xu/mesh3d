@@ -9,8 +9,16 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
@@ -21,6 +29,14 @@ body {
   padding: 20px 28px;
   background: #ffffff;
   border-bottom: 1px solid #d9e0e7;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 h1,
@@ -52,11 +68,33 @@ p {
   white-space: nowrap;
 }
 
+.auth-panel {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.auth-card {
+  width: min(100%, 380px);
+  background: #ffffff;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.auth-error {
+  color: #b42318;
+  font-size: 13px;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(320px, 420px) 1fr;
   gap: 18px;
   padding: 18px;
+  flex: 1;
+  min-height: 0;
 }
 
 .panel {
@@ -64,10 +102,13 @@ p {
   border: 1px solid #d9e0e7;
   border-radius: 8px;
   padding: 18px;
+  min-height: 0;
 }
 
 .controls {
   align-self: start;
+  max-height: 100%;
+  overflow: auto;
 }
 
 form {
@@ -112,6 +153,12 @@ button,
   text-decoration: none;
 }
 
+button.secondary {
+  border: 1px solid #c8d2dc;
+  background: #ffffff;
+  color: #26313d;
+}
+
 button:disabled {
   cursor: wait;
   opacity: 0.6;
@@ -151,6 +198,8 @@ button:disabled {
 
 .viewer {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .viewer-head {
@@ -185,9 +234,49 @@ button:disabled {
   color: #ffffff;
 }
 
+.mesh-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  background: #101820;
+}
+
+.mesh-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.mesh-message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #c9d4df;
+  text-align: center;
+}
+
+.mesh-message.hidden {
+  display: none;
+}
+
+.raw-mesh {
+  margin-top: 12px;
+}
+
+.raw-mesh summary {
+  cursor: pointer;
+  color: #344252;
+  font-weight: 700;
+  font-size: 13px;
+}
+
 .mesh-preview {
-  min-height: 520px;
-  max-height: calc(100vh - 230px);
+  max-height: 260px;
   overflow: auto;
   border: 1px solid #d9e0e7;
   border-radius: 8px;
@@ -198,12 +287,26 @@ button:disabled {
 }
 
 @media (max-width: 900px) {
+  body {
+    min-height: 100%;
+    height: auto;
+    overflow: auto;
+  }
+
   .layout {
     grid-template-columns: 1fr;
+    flex: none;
+    min-height: auto;
   }
 
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .mesh-canvas {
+    min-height: 420px;
+    height: 60vh;
+    max-height: none;
   }
 }

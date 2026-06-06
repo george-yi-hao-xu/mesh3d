@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mesh3D Solver</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+        }
+      }
+    </script>
   </head>
   <body>
     <header class="topbar">
@@ -12,16 +20,44 @@
         <h1>Mesh3D Solver</h1>
         <p>Upload a point cloud, run the server solve, and inspect checkpoint results.</p>
       </div>
-      <span id="serverStatus" class="status">Checking server</span>
+      <div class="topbar-actions">
+        <span id="serverStatus" class="status">Checking server</span>
+        <span id="authUser" class="status hidden"></span>
+        <button id="logoutButton" class="secondary hidden" type="button">Logout</button>
+      </div>
     </header>
 
-    <main class="layout">
+    <section id="authPanel" class="auth-panel">
+      <div class="auth-card">
+        <h2 id="authTitle">Login</h2>
+        <form id="authForm">
+          <label>
+            Username
+            <input id="authUsername" name="username" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            Password
+            <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <p id="authError" class="auth-error hidden"></p>
+          <button id="authSubmit" type="submit">Login</button>
+        </form>
+        <button id="authToggle" class="secondary" type="button">Create an account</button>
+      </div>
+    </section>
+
+    <main id="appLayout" class="layout hidden">
       <section class="panel controls">
         <h2>New Job</h2>
         <form id="jobForm">
           <label>
             Point cloud .msh
             <input id="pointCloud" name="pointCloud" type="file" accept=".msh,.txt" required />
+          </label>
+
+          <label>
+            Job name
+            <input id="jobName" name="jobName" type="text" />
           </label>
 
           <div class="grid">
@@ -76,7 +112,13 @@
         </div>
 
         <div id="checkpointTabs" class="tabs"></div>
-        <pre id="meshPreview" class="mesh-preview">No mesh loaded.</pre>
+        <div id="meshCanvas" class="mesh-canvas">
+          <div id="meshCanvasMessage" class="mesh-message">No mesh loaded.</div>
+        </div>
+        <details class="raw-mesh">
+          <summary>Raw .msh</summary>
+          <pre id="meshPreview" class="mesh-preview">No mesh loaded.</pre>
+        </details>
       </section>
     </main>
 

@@ -1,13 +1,24 @@
-const state = {
-  jobs: [],
-  activeJobId: null,
-  events: null,
-};
+import { checkHealth, getMe, login, logout, register } from "./api.js";
+import { defaultJobName } from "./format.js";
+import { createJobController } from "./jobs.js";
+import { maxCachedMeshes, state } from "./state.js";
 
 const els = {
   status: document.querySelector("#serverStatus"),
+  authPanel: document.querySelector("#authPanel"),
+  appLayout: document.querySelector("#appLayout"),
+  authForm: document.querySelector("#authForm"),
+  authTitle: document.querySelector("#authTitle"),
+  authUsername: document.querySelector("#authUsername"),
+  authPassword: document.querySelector("#authPassword"),
+  authError: document.querySelector("#authError"),
+  authSubmit: document.querySelector("#authSubmit"),
+  authToggle: document.querySelector("#authToggle"),
+  authUser: document.querySelector("#authUser"),
+  logout: document.querySelector("#logoutButton"),
   form: document.querySelector("#jobForm"),
   file: document.querySelector("#pointCloud"),
+  jobName: document.querySelector("#jobName"),
   stiffness: document.querySelector("#stiffness"),
   damping: document.querySelector("#damping"),
   snapshotInterval: document.querySelector("#snapshotInterval"),
@@ -20,9 +31,57 @@ const els = {
   activeJobTitle: document.querySelector("#activeJobTitle"),
   activeJobMeta: document.querySelector("#activeJobMeta"),
   tabs: document.querySelector("#checkpointTabs"),
+  meshCanvas: document.querySelector("#meshCanvas"),
+  meshCanvasMessage: document.querySelector("#meshCanvasMessage"),
   preview: document.querySelector("#meshPreview"),
   download: document.querySelector("#downloadLink"),
 };
+
+const jobs = createJobController(state, els, { maxCachedMeshes, onAuthError: handleAuthError });
+let authMode = "login";
+
+els.authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  setAuthError("");
+  els.authSubmit.disabled = true;
+  els.authSubmit.textContent = authMode === "login" ? "Logging in" : "Registering";
+
+  try {
+    const username = els.authUsername.value.trim();
+    const password = els.authPassword.value;
+    const data = authMode === "login"
+      ? await login(username, password)
+      : await register(username, password);
+    await showApp(data.user);
+  } catch (error) {
+    setAuthError(error.message);
+  } finally {
+    els.authSubmit.disabled = false;
+    renderAuthMode();
+  }
+});
+
+els.authToggle.addEventListener("click", () => {
+  authMode = authMode === "login" ? "register" : "login";
+  setAuthError("");
+  renderAuthMode();
+});
+
+els.logout.addEventListener("click", async () => {
+  await logout().catch(() => {});
+  showAuth();
+});
+
+els.file.addEventListener("change", () => {
+  if (!state.jobNameEdited || !els.jobName.value.trim()) {
+    els.jobName.value = getDefaultJobName();
+    state.jobNameEdited = false;
+  }
+});
+
+els.jobName.addEventListener("input", () => {
+  state.jobNameEdited = true;
+});
 
 els.form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -31,11 +90,12 @@ els.form.addEventListener("submit", async (event) => {
   submit.textContent = "Starting";
 
   try {
-    const upload = await uploadPointCloud();
-    const job = await createJob(upload.id);
-    await refreshJobs();
-    selectJob(job.id);
+    if (!els.jobName.value.trim()) {
+      els.jobName.value = getDefaultJobName();
+    }
+    await jobs.submitJob();
   } catch (error) {
+    if (handleAuthError(error)) return;
     alert(error.message);
   } finally {
     submit.disabled = false;
@@ -44,132 +104,76 @@ els.form.addEventListener("submit", async (event) => {
 });
 
 async function init() {
-  await checkHealth();
-  await refreshJobs();
+  await updateServerStatus();
+  try {
+    const data = await getMe();
+    await showApp(data.user);
+  } catch {
+    showAuth();
+  }
 }
 
-async function checkHealth() {
+async function updateServerStatus() {
   try {
-    const res = await fetch("/api/health");
-    if (!res.ok) throw new Error("server unavailable");
+    await checkHealth();
     els.status.textContent = "Server ready";
   } catch {
     els.status.textContent = "Server offline";
   }
 }
 
-async function uploadPointCloud() {
-  const file = els.file.files[0];
-  if (!file) {
-    throw new Error("Choose a point cloud file first.");
-  }
-
-  const body = new FormData();
-  body.append("pointCloud", file);
-
-  const res = await fetch("/api/uploads", {
-    method: "POST",
-    body,
-  });
-  return readJSON(res);
+function getDefaultJobName() {
+  return defaultJobName(els.file.files[0]?.name);
 }
 
-async function createJob(uploadId) {
-  const config = {
-    stiffness: Number(els.stiffness.value),
-    dampingFactor: Number(els.damping.value),
-    snapshotInterval: Number(els.snapshotInterval.value),
-    maxSimTime: Number(els.maxSimTime.value),
-    springSeed: Number(els.springSeed.value),
-    maxSpringDist: Number(els.maxSpringDist.value),
-    maxSpringsPerParticle: Number(els.maxSpringsPerParticle.value),
-    springConnectProb: Number(els.springConnectProb.value),
-  };
+async function showApp(user) {
+  state.currentUser = user;
+  els.authPanel.classList.add("hidden");
+  els.appLayout.classList.remove("hidden");
+  els.authUser.textContent = user.username;
+  els.authUser.classList.remove("hidden");
+  els.logout.classList.remove("hidden");
 
-  const res = await fetch("/api/jobs", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uploadId, config }),
-  });
-  return readJSON(res);
-}
-
-async function refreshJobs() {
-  const res = await fetch("/api/jobs");
-  state.jobs = await readJSON(res);
-  state.jobs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  renderJobs();
-}
-
-function renderJobs() {
-  els.jobList.innerHTML = "";
-
-  if (state.jobs.length === 0) {
-    els.jobList.innerHTML = `<p class="job-meta">No jobs yet.</p>`;
-    return;
-  }
-
-  for (const job of state.jobs) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `job-item ${job.id === state.activeJobId ? "active" : ""}`;
-    item.innerHTML = `
-      <span class="job-title">${escapeHTML(job.inputName || job.id)}</span>
-      <span class="job-meta">${job.status} - ${job.snapshots?.length || 0} checkpoints - ${formatDate(job.createdAt)}</span>
-    `;
-    item.addEventListener("click", () => selectJob(job.id));
-    els.jobList.appendChild(item);
+  try {
+    await jobs.refreshJobs();
+  } catch (error) {
+    if (!handleAuthError(error)) throw error;
   }
 }
 
-async function selectJob(jobId) {
-  state.activeJobId = jobId;
+function showAuth() {
   closeEvents();
+  state.currentUser = null;
+  state.jobs = [];
+  state.activeJobId = null;
+  state.meshCache.clear();
 
-  const job = await fetchJob(jobId);
-  upsertJob(job);
-  renderJobs();
-  renderActiveJob(job);
-
-  if (job.status === "queued" || job.status === "running") {
-    openEvents(jobId);
-  }
+  els.appLayout.classList.add("hidden");
+  els.authPanel.classList.remove("hidden");
+  els.authUser.classList.add("hidden");
+  els.logout.classList.add("hidden");
+  els.authPassword.value = "";
+  renderAuthMode();
 }
 
-async function fetchJob(jobId) {
-  const res = await fetch(`/api/jobs/${jobId}`);
-  return readJSON(res);
+function renderAuthMode() {
+  const isLogin = authMode === "login";
+  els.authTitle.textContent = isLogin ? "Login" : "Register";
+  els.authSubmit.textContent = isLogin ? "Login" : "Register";
+  els.authToggle.textContent = isLogin ? "Create an account" : "Use existing account";
+  els.authPassword.autocomplete = isLogin ? "current-password" : "new-password";
 }
 
-function openEvents(jobId) {
-  const events = new EventSource(`/api/jobs/${jobId}/events`);
-  state.events = events;
+function setAuthError(message) {
+  els.authError.textContent = message;
+  els.authError.classList.toggle("hidden", !message);
+}
 
-  events.addEventListener("snapshot", (message) => {
-    const event = JSON.parse(message.data);
-    if (event.jobId !== state.activeJobId) return;
-    fetchJob(event.jobId).then((job) => {
-      upsertJob(job);
-      renderActiveJob(job);
-      renderJobs();
-    });
-  });
-
-  events.addEventListener("done", (message) => {
-    const event = JSON.parse(message.data);
-    if (event.job) upsertJob(event.job);
-    if (event.jobId === state.activeJobId) renderActiveJob(event.job);
-    renderJobs();
-    closeEvents();
-  });
-
-  events.addEventListener("failed", (message) => {
-    const event = JSON.parse(message.data);
-    if (event.job) upsertJob(event.job);
-    if (event.jobId === state.activeJobId) renderActiveJob(event.job);
-    renderJobs();
-    closeEvents();
-  });
+function handleAuthError(error) {
+  if (error.status !== 401) return false;
+  showAuth();
+  setAuthError("Please log in again.");
+  return true;
 }
 
 function closeEvents() {
@@ -177,99 +181,6 @@ function closeEvents() {
     state.events.close();
     state.events = null;
   }
-}
-
-function renderActiveJob(job) {
-  if (!job) return;
-
-  els.activeJobTitle.textContent = job.inputName || job.id;
-  const outcome = job.status === "done"
-    ? ` - ${job.converged ? "converged" : "limit reached"} at ${formatSeconds(job.finalTime || 0)}`
-    : "";
-  els.activeJobMeta.textContent = `${job.status}${outcome} - ${job.id}`;
-  els.tabs.innerHTML = "";
-  els.download.classList.add("hidden");
-  els.download.removeAttribute("href");
-
-  const snapshots = job.snapshots || [];
-  for (const snapshot of snapshots) {
-    addCheckpointButton(snapshot.label, snapshot.url);
-  }
-
-  if (job.resultUrl) {
-    addCheckpointButton("Final", job.resultUrl);
-  }
-
-  if (snapshots.length === 0 && !job.resultUrl) {
-    els.preview.textContent = job.status === "failed"
-      ? `Job failed: ${job.error || "unknown error"}`
-      : "Waiting for first checkpoint.";
-  }
-}
-
-function addCheckpointButton(label, url) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "tab";
-  button.textContent = label;
-  button.addEventListener("click", () => loadMesh(url, button));
-  els.tabs.appendChild(button);
-}
-
-async function loadMesh(url, activeButton) {
-  const res = await fetch(url);
-  if (!res.ok) {
-    els.preview.textContent = `Could not load ${url}`;
-    return;
-  }
-
-  const text = await res.text();
-  els.preview.textContent = text;
-  els.download.href = url;
-  els.download.download = url.endsWith("/result") ? "final.msh" : url.split("/").pop();
-  els.download.classList.remove("hidden");
-
-  for (const tab of els.tabs.querySelectorAll(".tab")) {
-    tab.classList.toggle("active", tab === activeButton);
-  }
-}
-
-function upsertJob(job) {
-  const index = state.jobs.findIndex((item) => item.id === job.id);
-  if (index >= 0) {
-    state.jobs[index] = job;
-  } else {
-    state.jobs.unshift(job);
-  }
-}
-
-async function readJSON(res) {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || `Request failed: ${res.status}`);
-  }
-  return data;
-}
-
-function formatDate(value) {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatSeconds(value) {
-  return `${Number(value).toFixed(2)}s`;
-}
-
-function escapeHTML(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 init();
