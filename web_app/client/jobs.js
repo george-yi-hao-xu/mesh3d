@@ -46,6 +46,8 @@ import { renderPointCloud, setMeshMessage } from "./mesh-viewer.js";
  */
 export function createJobController(state, els, options) {
   const { onAuthError = () => false } = options;
+  let playbackTimer = null;
+  let playbackButton = null;
 
   /**
    * Loads the current user's jobs and seeds the metadata cache.
@@ -138,6 +140,7 @@ export function createJobController(state, els, options) {
    * @returns {Promise<void>}
    */
   async function selectJob(jobId) {
+    stopPlayback();
     state.activeJobId = jobId;
     state.activeFrameUrl = null;
     state.activeFrames = [];
@@ -162,6 +165,7 @@ export function createJobController(state, els, options) {
    * @returns {void}
    */
   function renderActiveJob(job, options = {}) {
+    stopPlayback();
     if (!job) return;
     const { autoSelectFrame = false } = options;
 
@@ -209,7 +213,10 @@ export function createJobController(state, els, options) {
     els.tabs.classList.add("frame-control");
     els.tabs.innerHTML = `
       <div class="frame-head">
-        <span class="frame-title">Time frame</span>
+        <div class="frame-tools">
+          <button class="playback-button" type="button">Play</button>
+          <span class="frame-title">Time frame</span>
+        </div>
         <span class="frame-label"></span>
       </div>
       <input class="frame-slider" type="range" min="0" max="${frames.length - 1}" step="1" />
@@ -221,16 +228,26 @@ export function createJobController(state, els, options) {
 
     const slider = els.tabs.querySelector(".frame-slider");
     const label = els.tabs.querySelector(".frame-label");
+    const playButton = els.tabs.querySelector(".playback-button");
+    playbackButton = playButton;
     const selectedIndex = Math.max(0, frames.findIndex((frame) => frame.url === selectedFrame.url));
     slider.value = String(selectedIndex);
     updateFrameLabel(label, frames[selectedIndex], selectedIndex, frames.length);
+    playButton.disabled = frames.length < 2;
+    playButton.classList.toggle("hidden", frames.length < 2);
+    playButton.addEventListener("click", () => {
+      if (playbackTimer) {
+        stopPlayback();
+        return;
+      }
+      startPlayback(frames, slider, label, playButton);
+    });
 
     slider.addEventListener("input", () => {
+      stopPlayback();
       const index = Number(slider.value);
       updateFrameLabel(label, frames[index], index, frames.length);
-    });
-    slider.addEventListener("change", () => {
-      selectFrame(frames[Number(slider.value)].url);
+      selectFrame(frames[index].url);
     });
   }
 
@@ -273,7 +290,10 @@ export function createJobController(state, els, options) {
     els.download.classList.remove("hidden");
 
     try {
-      await renderPointCloud(state, els, frame.pointCloud);
+      await renderPointCloud(state, els, frame.pointCloud, {
+        jobId: state.activeJobId,
+        frames: state.activeFrames,
+      });
     } catch (error) {
       setMeshMessage(els, `Could not visualize this mesh: ${error.message}`);
     }
@@ -356,6 +376,7 @@ export function createJobController(state, els, options) {
   }
 
   function clearActiveJobView() {
+    stopPlayback();
     state.activeJobId = null;
     state.activeFrameUrl = null;
     state.activeFrames = [];
@@ -471,6 +492,58 @@ export function createJobController(state, els, options) {
    */
   function updateFrameLabel(label, frame, index, total) {
     label.textContent = `${frame.label} (${index + 1}/${total})`;
+  }
+
+  /**
+   * Advances the selected timeline frame at a fixed playback cadence.
+   *
+   * @param {import("./api.js").MeshFrame[]} frames
+   * @param {HTMLInputElement} slider
+   * @param {HTMLElement} label
+   * @param {HTMLButtonElement} button
+   * @returns {void}
+   */
+  function startPlayback(frames, slider, label, button) {
+    if (frames.length < 2) return;
+    if (Number(slider.value) >= frames.length - 1) {
+      slider.value = "0";
+      updateFrameLabel(label, frames[0], 0, frames.length);
+      selectFrame(frames[0].url);
+    }
+
+    button.textContent = "Pause";
+    playbackButton = button;
+    playbackTimer = window.setInterval(() => {
+      const currentIndex = Number(slider.value);
+      if (currentIndex >= frames.length - 1) {
+        stopPlayback();
+        return;
+      }
+
+      const nextIndex = currentIndex + 1;
+      slider.value = String(nextIndex);
+      updateFrameLabel(label, frames[nextIndex], nextIndex, frames.length);
+      selectFrame(frames[nextIndex].url);
+
+      if (nextIndex >= frames.length - 1) {
+        stopPlayback();
+      }
+    }, 50);
+  }
+
+  /**
+   * Stops active timeline playback and resets the play button label.
+   *
+   * @returns {void}
+   */
+  function stopPlayback() {
+    if (playbackTimer) {
+      window.clearInterval(playbackTimer);
+      playbackTimer = null;
+    }
+    if (playbackButton) {
+      playbackButton.textContent = "Play";
+    }
   }
 
   /**

@@ -145,7 +145,7 @@ button,
   border: 0;
   border-radius: 6px;
   padding: 10px 12px;
-  background: #2166d1;
+  background: #66f;
   color: #ffffff;
   font: inherit;
   font-weight: 700;
@@ -246,6 +246,10 @@ button:disabled {
   backdrop-filter: blur(2px);
 }
 
+.overlay.hidden {
+  display: none;
+}
+
 .overlay-card {
   width: min(100%, 420px);
   background: #ffffff;
@@ -293,6 +297,22 @@ button:disabled {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+}
+
+.frame-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.playback-button {
+  padding: 5px 9px;
+  border: 1px solid #c8d2dc;
+  background: #ffffff;
+  color: #66f;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .frame-title {

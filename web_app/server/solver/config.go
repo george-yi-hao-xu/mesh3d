@@ -44,7 +44,7 @@ func LoadSolverConfig(raw map[string]interface{}) SolverConfig {
 		MaxSpringsPerParticle: configInt(raw, "maxSpringsPerParticle", 4),
 		SpringConnectProb:     configFloat(raw, "springConnectProb", 0.8),
 		TimeStep:              configFloat(raw, "timeStep", 1.0/60.0),
-		SnapshotInterval:      configFloat(raw, "snapshotInterval", 5.0),
+		SnapshotInterval:      configFloat(raw, "snapshotInterval", 0.05),
 		MaxSimTime:            configFloat(raw, "maxSimTime", 120.0),
 		MaxSteps:              configInt(raw, "maxSteps", 200000),
 		VelocityEpsilon:       configFloat(raw, "velocityEpsilon", 0.001),

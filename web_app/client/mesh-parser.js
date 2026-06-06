@@ -1,6 +1,7 @@
 /**
  * @typedef {{ x: number, y: number, z: number, fixed: boolean, mass: number }} Point3
  * @typedef {{ points: Point3[], metadata: Record<string, string> }} PointCloud
+ * @typedef {{ minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number }} PointBounds
  * @typedef {{ points: Point3[], min: { x: number, y: number, z: number }, max: { x: number, y: number, z: number }, span: number }} NormalizedPointCloud
  */
 
@@ -52,28 +53,44 @@ export function parsePointCloud(text) {
 }
 
 /**
- * Scales points into a stable Three.js viewing range while preserving the true `(0, 0, 0)` origin.
+ * Computes raw coordinate bounds for one or more point sets.
  *
- * @param {Point3[]} points
- * @returns {NormalizedPointCloud}
+ * @param {Point3[][]} pointSets
+ * @returns {PointBounds | null}
  */
-export function normalizePoints(points) {
-  const bounds = points.reduce((acc, point) => ({
-    minX: Math.min(acc.minX, point.x),
-    minY: Math.min(acc.minY, point.y),
-    minZ: Math.min(acc.minZ, point.z),
-    maxX: Math.max(acc.maxX, point.x),
-    maxY: Math.max(acc.maxY, point.y),
-    maxZ: Math.max(acc.maxZ, point.z),
-  }), {
+export function computePointBounds(pointSets) {
+  const bounds = {
     minX: Infinity,
     minY: Infinity,
     minZ: Infinity,
     maxX: -Infinity,
     maxY: -Infinity,
     maxZ: -Infinity,
-  });
+  };
+  let count = 0;
 
+  for (const points of pointSets) {
+    for (const point of points || []) {
+      bounds.minX = Math.min(bounds.minX, point.x);
+      bounds.minY = Math.min(bounds.minY, point.y);
+      bounds.minZ = Math.min(bounds.minZ, point.z);
+      bounds.maxX = Math.max(bounds.maxX, point.x);
+      bounds.maxY = Math.max(bounds.maxY, point.y);
+      bounds.maxZ = Math.max(bounds.maxZ, point.z);
+      count += 1;
+    }
+  }
+
+  return count > 0 ? bounds : null;
+}
+
+/**
+ * Returns the viewport scale used to normalize raw coordinates.
+ *
+ * @param {PointBounds} bounds
+ * @returns {number}
+ */
+export function pointBoundsScale(bounds) {
   const maxSpan = Math.max(
     Math.abs(bounds.minX),
     Math.abs(bounds.maxX),
@@ -83,7 +100,27 @@ export function normalizePoints(points) {
     Math.abs(bounds.maxZ),
     1,
   );
-  const scale = 16 / maxSpan;
+  return 16 / maxSpan;
+}
+
+/**
+ * Scales points into a stable Three.js viewing range while preserving the true `(0, 0, 0)` origin.
+ *
+ * @param {Point3[]} points
+ * @param {PointBounds | null} [referenceBounds]
+ * @returns {NormalizedPointCloud}
+ */
+export function normalizePoints(points, referenceBounds = null) {
+  const bounds = referenceBounds || computePointBounds([points]) || {
+    minX: 0,
+    minY: 0,
+    minZ: 0,
+    maxX: 0,
+    maxY: 0,
+    maxZ: 0,
+  };
+
+  const scale = pointBoundsScale(bounds);
 
   const normalizedPoints = points.map((point) => ({
     x: point.x * scale,

@@ -8,6 +8,9 @@
  *   camera: any,
  *   controls: any,
  *   meshGroup: any,
+ *   viewportJobId: string | null,
+ *   viewportBounds: import("./mesh-parser.js").PointBounds | null,
+ *   viewportCameraFit: boolean,
  *   resizeObserver: ResizeObserver | null,
  *   animationId: number | null
  * }} ViewerState
@@ -42,6 +45,9 @@ export const state = {
     camera: null,
     controls: null,
     meshGroup: null,
+    viewportJobId: null,
+    viewportBounds: null,
+    viewportCameraFit: false,
     resizeObserver: null,
     animationId: null,
   },

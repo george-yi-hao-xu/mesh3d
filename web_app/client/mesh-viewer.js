@@ -1,4 +1,4 @@
-import { inferEdges, normalizePoints } from "./mesh-parser.js";
+import { computePointBounds, inferEdges, normalizePoints, pointBoundsScale } from "./mesh-parser.js";
 
 /**
  * @typedef {{
@@ -13,19 +13,21 @@ import { inferEdges, normalizePoints } from "./mesh-parser.js";
  * @param {import("./state.js").ClientState} state
  * @param {ViewerElements} els
  * @param {import("./mesh-parser.js").PointCloud} pointCloud
+ * @param {{ jobId?: string | null, frames?: import("./api.js").MeshFrame[] }} [options]
  * @returns {Promise<void>}
  */
-export async function renderPointCloud(state, els, pointCloud) {
+export async function renderPointCloud(state, els, pointCloud, options = {}) {
   const viewer = await ensureViewer(state, els);
   if (!viewer) return;
 
   const { THREE, scene } = viewer;
+  const viewport = updateViewerViewport(viewer, pointCloud, options);
   if (viewer.meshGroup) {
     scene.remove(viewer.meshGroup);
     disposeObject(viewer.meshGroup);
   }
 
-  const normalized = normalizePoints(pointCloud.points);
+  const normalized = normalizePoints(pointCloud.points, viewport.bounds);
   const group = new THREE.Group();
   const mobilePositions = [];
   const fixedPositions = [];
@@ -78,7 +80,10 @@ export async function renderPointCloud(state, els, pointCloud) {
 
   scene.add(group);
   viewer.meshGroup = group;
-  fitCameraToBox(viewer, box);
+  if (viewport.shouldFitCamera) {
+    fitCameraToBox(viewer, createNormalizedBoxFromBounds(THREE, viewport.bounds));
+    viewer.viewportCameraFit = true;
+  }
   setMeshMessage(els, "", true);
 }
 
@@ -192,6 +197,121 @@ function createPointLayer(THREE, positions, color, size) {
     sizeAttenuation: true,
   });
   return new THREE.Points(geometry, material);
+}
+
+/**
+ * Updates cached bounds for the active job so all frames share one viewport scale.
+ *
+ * @param {import("./state.js").ViewerState} viewer
+ * @param {import("./mesh-parser.js").PointCloud} pointCloud
+ * @param {{ jobId?: string | null, frames?: import("./api.js").MeshFrame[] }} options
+ * @returns {{ bounds: import("./mesh-parser.js").PointBounds, shouldFitCamera: boolean }}
+ */
+function updateViewerViewport(viewer, pointCloud, options) {
+  const jobId = options.jobId || null;
+  const bounds = computeLoadedFrameBounds(pointCloud, options.frames || []);
+  const switchedJobs = viewer.viewportJobId !== jobId;
+  const expandedBounds = !switchedJobs && boundsExceed(viewer.viewportBounds, bounds);
+
+  if (switchedJobs) {
+    viewer.viewportJobId = jobId;
+    viewer.viewportBounds = bounds;
+    viewer.viewportCameraFit = false;
+  } else if (expandedBounds) {
+    viewer.viewportBounds = mergeBounds(viewer.viewportBounds, bounds);
+    viewer.viewportCameraFit = false;
+  } else if (!viewer.viewportBounds) {
+    viewer.viewportBounds = bounds;
+  }
+
+  return {
+    bounds: viewer.viewportBounds,
+    shouldFitCamera: !viewer.viewportCameraFit,
+  };
+}
+
+/**
+ * Computes bounds from every loaded frame available for the selected job.
+ *
+ * @param {import("./mesh-parser.js").PointCloud} pointCloud
+ * @param {import("./api.js").MeshFrame[]} frames
+ * @returns {import("./mesh-parser.js").PointBounds}
+ */
+function computeLoadedFrameBounds(pointCloud, frames) {
+  const pointSets = [pointCloud.points];
+  for (const frame of frames) {
+    if (frame.loaded && frame.pointCloud?.points) {
+      pointSets.push(frame.pointCloud.points);
+    }
+  }
+  return computePointBounds(pointSets) || {
+    minX: 0,
+    minY: 0,
+    minZ: 0,
+    maxX: 0,
+    maxY: 0,
+    maxZ: 0,
+  };
+}
+
+/**
+ * Reports whether new raw bounds exceed the cached job bounds.
+ *
+ * @param {import("./mesh-parser.js").PointBounds | null} current
+ * @param {import("./mesh-parser.js").PointBounds} next
+ * @returns {boolean}
+ */
+function boundsExceed(current, next) {
+  if (!current) return true;
+  const epsilon = 1e-9;
+  return next.minX < current.minX - epsilon
+    || next.minY < current.minY - epsilon
+    || next.minZ < current.minZ - epsilon
+    || next.maxX > current.maxX + epsilon
+    || next.maxY > current.maxY + epsilon
+    || next.maxZ > current.maxZ + epsilon;
+}
+
+/**
+ * Merges raw coordinate bounds.
+ *
+ * @param {import("./mesh-parser.js").PointBounds | null} current
+ * @param {import("./mesh-parser.js").PointBounds} next
+ * @returns {import("./mesh-parser.js").PointBounds}
+ */
+function mergeBounds(current, next) {
+  if (!current) return next;
+  return {
+    minX: Math.min(current.minX, next.minX),
+    minY: Math.min(current.minY, next.minY),
+    minZ: Math.min(current.minZ, next.minZ),
+    maxX: Math.max(current.maxX, next.maxX),
+    maxY: Math.max(current.maxY, next.maxY),
+    maxZ: Math.max(current.maxZ, next.maxZ),
+  };
+}
+
+/**
+ * Builds a normalized reference box from cached raw bounds.
+ *
+ * @param {any} THREE
+ * @param {import("./mesh-parser.js").PointBounds} bounds
+ * @returns {any}
+ */
+function createNormalizedBoxFromBounds(THREE, bounds) {
+  const scale = pointBoundsScale(bounds);
+  return new THREE.Box3(
+    new THREE.Vector3(
+      Math.min(bounds.minX * scale, 0),
+      Math.min(bounds.minY * scale, 0),
+      Math.min(bounds.minZ * scale, 0),
+    ),
+    new THREE.Vector3(
+      Math.max(bounds.maxX * scale, 0),
+      Math.max(bounds.maxY * scale, 0),
+      Math.max(bounds.maxZ * scale, 0),
+    ),
+  );
 }
 
 /**
