@@ -1,5 +1,5 @@
 import { makeAutoObservable, runInAction } from "mobx";
-import { createJob, deleteJob, fetchJob, fetchMeshData, listJobs, uploadMeshArtifact } from "../lib/api";
+import { createJob, deleteJob, fetchJob, fetchMeshData, listJobs } from "../lib/api";
 import { formatSeconds, jobTitle, sanitizeDownloadStem } from "../lib/format";
 import type { AppError, Job, MeshFrame, PreparedMesh } from "../types";
 import type { RootStore } from "./root-store";
@@ -95,11 +95,11 @@ export class JobStore {
     try {
       this.root.preview.ensureJobName();
       const preview = await this.root.preview.prepareMeshPreview();
-      const upload = await uploadMeshArtifact(
-        new Blob([preview.text], { type: "text/plain" }),
-        this.root.preview.generatedMeshFileName(),
-      );
-      const response = await createJob(upload.id, this.root.preview.jobName.trim(), this.root.preview.config);
+      if (preview.mesh.edges.length === 0) {
+        throw new Error("Cannot run solver: this mesh has no springs. Enable generated springs or choose a mesh with existing springs.");
+      }
+      const uploadId = preview.uploadId || (await this.root.warehouse.savePreparedMesh(preview)).id;
+      const response = await createJob(uploadId, this.root.preview.jobName.trim(), this.root.preview.config);
       runInAction(() => {
         this.activePreview = null;
         this.activeJobId = response.job.id;
@@ -128,6 +128,16 @@ export class JobStore {
     this.activeFrames = [];
     this.rawPreviewText = preview.text;
     this.root.viewer.render(preview.mesh, { jobId: "spring-preview", frames: [] });
+  }
+
+  clearPreparedMeshPreview(message: string): void {
+    this.stopPlayback();
+    this.activePreview = null;
+    this.activeJobId = null;
+    this.activeFrameUrl = null;
+    this.activeFrames = [];
+    this.rawPreviewText = message;
+    this.root.viewer.clear(message);
   }
 
   async selectJob(jobId: string): Promise<void> {

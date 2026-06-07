@@ -107,7 +107,7 @@ function parseMeshSnapshot(text: string): MeshData {
       if (![a, b, restLength, stiffness].every(Number.isFinite) || !Number.isInteger(a) || !Number.isInteger(b)) {
         throw new Error("invalid mesh edge value");
       }
-      edges.push({ a, b, restLength, stiffness });
+      edges.push({ a, b, restLength, stiffness, origin: "existing" });
     }
   }
 

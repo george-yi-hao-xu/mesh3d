@@ -9,7 +9,7 @@ export const Topbar = observer(function Topbar() {
     <header className="topbar">
       <div>
         <h1>Mesh3D Solver</h1>
-        <p>Upload a point cloud, run the server solve, and inspect checkpoint results.</p>
+        <p>Pick warehouse meshes, run the server solve, and inspect checkpoint results.</p>
       </div>
       <div className="topbar-actions">
         <span className="status">{auth.serverStatus}</span>

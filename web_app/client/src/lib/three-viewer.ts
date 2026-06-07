@@ -72,22 +72,22 @@ export class ThreeMeshViewer {
 
     const edges = pointCloud.edges || [];
     if (edges.length > 0) {
-      const edgePositions: number[] = [];
+      const existingEdgePositions: number[] = [];
+      const generatedEdgePositions: number[] = [];
       for (const edge of edges) {
         const p1 = normalized.points[edge.a];
         const p2 = normalized.points[edge.b];
         if (!p1 || !p2) continue;
-        edgePositions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+        const target = edge.origin === "generated" ? generatedEdgePositions : existingEdgePositions;
+        target.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
       }
 
-      const edgeGeometry = new THREE.BufferGeometry();
-      edgeGeometry.setAttribute("position", new THREE.Float32BufferAttribute(edgePositions, 3));
-      const edgeMaterial = new THREE.LineBasicMaterial({
-        color: 0x8fb3d9,
-        transparent: true,
-        opacity: 0.42,
-      });
-      group.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+      if (existingEdgePositions.length > 0) {
+        group.add(createEdgeLayer(existingEdgePositions, 0x8fb3d9, 0.42));
+      }
+      if (generatedEdgePositions.length > 0) {
+        group.add(createEdgeLayer(generatedEdgePositions, 0xff8a3d, 0.74));
+      }
     }
 
     const zeroPlane = new THREE.GridHelper(Math.max(normalized.span, 1), 16, 0x4b6f91, 0x263b4d);
@@ -201,6 +201,17 @@ function createPointLayer(positions: number[], color: number, size: number): THR
     sizeAttenuation: true,
   });
   return new THREE.Points(geometry, material);
+}
+
+function createEdgeLayer(positions: number[], color: number, opacity: number): THREE.LineSegments {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  const material = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+  });
+  return new THREE.LineSegments(geometry, material);
 }
 
 function computeLoadedFrameBounds(pointCloud: MeshData, frames: MeshFrame[]): PointBounds {

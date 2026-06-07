@@ -82,7 +82,9 @@ Postgres stores users, upload metadata, job metadata, job config, and snapshot m
 ## API
 
 ```text
+GET  /api/uploads
 POST /api/uploads
+GET  /api/uploads/{id}
 POST /api/jobs
 GET  /api/jobs
 GET  /api/jobs/{id}
@@ -143,10 +145,22 @@ Vite proxies `/api` requests to `http://127.0.0.1:8080`.
 ### 2. Browser Previews and Uploads Mesh Topology
 
 ```text
+GET /api/uploads
+```
+
+Lists the signed-in user's mesh warehouse entries. Each entry includes the upload ID, file name, size, mesh kind, point count, edge count, and created timestamp.
+
+```text
 POST /api/uploads
 ```
 
-The browser parses the selected point cloud, generates deterministic spring edges from the current spring controls, previews the points plus springs, then uploads a generated `mesh-v1` artifact. The server calls `handleUploads`.
+Stores a raw uploaded `.msh`/`.mesh` file or a generated spring mesh in the signed-in user's mesh warehouse. The server validates that the file contains valid points and records point/spring counts.
+
+```text
+GET /api/uploads/{id}
+```
+
+Returns one user-owned warehouse mesh artifact plus its text content for previewing and job creation.
 
 It:
 

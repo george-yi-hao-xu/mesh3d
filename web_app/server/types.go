@@ -6,12 +6,15 @@ import (
 )
 
 type Upload struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"userId"`
-	FileName  string    `json:"fileName"`
-	Size      int64     `json:"size"`
-	Path      string    `json:"-"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	UserID     string    `json:"userId"`
+	FileName   string    `json:"fileName"`
+	Size       int64     `json:"size"`
+	MeshKind   string    `json:"meshKind"`
+	PointCount int       `json:"pointCount"`
+	EdgeCount  int       `json:"edgeCount"`
+	Path       string    `json:"-"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 type User struct {

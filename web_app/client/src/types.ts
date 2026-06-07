@@ -8,7 +8,15 @@ export type Upload = {
   userId?: string;
   fileName: string;
   size: number;
+  meshKind?: "uploaded" | "generated";
+  pointCount?: number;
+  edgeCount?: number;
   createdAt: string;
+};
+
+export type UploadArtifact = {
+  upload: Upload;
+  text: string;
 };
 
 export type Snapshot = {
@@ -61,6 +69,7 @@ export type Edge = {
   b: number;
   restLength: number;
   stiffness: number;
+  origin?: "existing" | "generated";
 };
 
 export type MeshData = {
@@ -123,4 +132,6 @@ export type PreparedMesh = {
   mesh: MeshData;
   text: string;
   sourceName: string;
+  uploadId?: string;
+  generated: boolean;
 };

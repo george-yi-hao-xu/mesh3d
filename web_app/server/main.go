@@ -42,8 +42,9 @@ func main() {
 	mux.HandleFunc("/api/auth/logout", app.handleLogout)
 	mux.HandleFunc("/api/auth/me", app.handleMe)
 
-	// Browser uploads the point-cloud file here first; the response upload ID is then used to create a solver job.
+	// Browser stores and picks user-owned mesh warehouse artifacts here.
 	mux.HandleFunc("/api/uploads", app.requireAuth(app.handleUploads))
+	mux.HandleFunc("/api/uploads/", app.requireAuth(app.handleUploadRoutes))
 
 	// Browser creates and lists solver jobs here after an upload has been stored.
 	mux.HandleFunc("/api/jobs", app.requireAuth(app.handleJobs))

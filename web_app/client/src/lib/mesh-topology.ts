@@ -42,6 +42,7 @@ export function generateSprings(points: Point3[], config: Pick<SolverConfig, "sp
           b: j,
           restLength: candidate.dist,
           stiffness,
+          origin: "generated",
         });
         connectionCount[i]++;
         connectionCount[j]++;

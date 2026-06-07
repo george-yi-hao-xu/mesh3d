@@ -1,8 +1,7 @@
 import { makeAutoObservable, runInAction } from "mobx";
 import { defaultJobName, sanitizeDownloadStem } from "../lib/format";
-import { parseMeshData } from "../lib/mesh-parser";
 import { generateSprings, serializeMeshV1 } from "../lib/mesh-topology";
-import type { PreparedMesh, SolverConfig } from "../types";
+import type { MeshData, PreparedMesh, SolverConfig, Upload } from "../types";
 import type { RootStore } from "./root-store";
 
 export const defaultConfig: SolverConfig = {
@@ -25,26 +24,45 @@ export const defaultConfig: SolverConfig = {
 
 export class MeshPreviewStore {
   readonly root: RootStore;
-  file: File | null = null;
+  sourceUpload: Upload | null = null;
+  sourceText = "";
+  sourceMesh: MeshData | null = null;
   jobName = "";
   jobNameEdited = false;
   config: SolverConfig = { ...defaultConfig };
-  status = "Choose a point cloud to preview springs.";
+  status = "Pick a mesh to preview springs.";
   preparedMesh: PreparedMesh | null = null;
   previewRequestId = 0;
+  includeGeneratedSprings = true;
 
   constructor(root: RootStore) {
     this.root = root;
     makeAutoObservable(this, { root: false });
   }
 
-  setFile(file: File | null): void {
-    this.file = file;
+  setWarehouseMesh(upload: Upload, text: string, mesh: MeshData): void {
+    this.sourceUpload = upload;
+    this.sourceText = text;
+    this.sourceMesh = mesh;
     if (!this.jobNameEdited || !this.jobName.trim()) {
-      this.jobName = defaultJobName(file?.name);
+      this.jobName = defaultJobName(upload.fileName);
       this.jobNameEdited = false;
     }
     void this.previewInput();
+  }
+
+  setSavedGeneratedMesh(upload: Upload): void {
+    if (!this.preparedMesh) return;
+    this.sourceUpload = upload;
+    this.sourceText = this.preparedMesh.text;
+    this.sourceMesh = this.preparedMesh.mesh;
+    this.preparedMesh = {
+      ...this.preparedMesh,
+      uploadId: upload.id,
+      generated: false,
+      sourceName: upload.fileName,
+    };
+    this.status = `${this.preparedMesh.mesh.points.length} points and ${this.preparedMesh.mesh.edges.length} springs saved to warehouse.`;
   }
 
   setJobName(value: string): void {
@@ -62,9 +80,14 @@ export class MeshPreviewStore {
     }
   }
 
+  setIncludeGeneratedSprings(value: boolean): void {
+    this.includeGeneratedSprings = value;
+    void this.previewInput();
+  }
+
   ensureJobName(): void {
     if (!this.jobName.trim()) {
-      this.jobName = defaultJobName(this.file?.name);
+      this.jobName = defaultJobName(this.sourceUpload?.fileName);
       this.jobNameEdited = false;
     }
   }
@@ -76,7 +99,7 @@ export class MeshPreviewStore {
       if (requestId !== this.previewRequestId) return;
       runInAction(() => {
         this.preparedMesh = preview;
-        this.status = `${preview.mesh.edges.length} springs generated from ${preview.mesh.points.length} points.`;
+        this.status = springPreviewStatus(preview);
       });
       this.root.jobs.showPreparedMeshPreview(preview);
     } catch (error) {
@@ -85,46 +108,82 @@ export class MeshPreviewStore {
         this.preparedMesh = null;
         this.status = error instanceof Error ? error.message : "Could not preview springs.";
       });
-      this.root.viewer.clear(this.status);
+      this.root.jobs.clearPreparedMeshPreview(this.status);
     }
   }
 
   async prepareMeshPreview(): Promise<PreparedMesh> {
-    const file = this.file;
-    if (!file) {
-      throw new Error("Choose a point cloud to preview springs.");
+    const sourceMesh = this.sourceMesh;
+    const sourceUpload = this.sourceUpload;
+    if (!sourceMesh || !sourceUpload) {
+      throw new Error("Pick a mesh first.");
     }
 
-    const sourceText = await file.text();
-    const parsed = parseMeshData(sourceText);
-    const edges = generateSprings(parsed.points, this.config);
-    if (edges.length === 0) {
-      throw new Error("No springs generated. Increase max distance, max springs, or connect probability.");
+    const generatedEdges = generateSprings(sourceMesh.points, this.config);
+    const existingEdges = sourceMesh.edges.map((edge) => ({ ...edge, origin: edge.origin || ("existing" as const) }));
+    const existingPairs = new Set(existingEdges.map(edgeKey));
+    const newEdges = this.includeGeneratedSprings
+      ? generatedEdges.filter((edge) => !existingPairs.has(edgeKey(edge)))
+      : [];
+
+    if (existingEdges.length > 0 && newEdges.length === 0) {
+      return {
+        mesh: {
+          ...sourceMesh,
+          edges: existingEdges,
+        },
+        text: this.sourceText,
+        sourceName: sourceUpload.fileName,
+        uploadId: sourceUpload.id,
+        generated: false,
+      };
     }
 
+    const edges = [...existingEdges, ...newEdges];
     const mesh = {
-      points: parsed.points,
+      points: sourceMesh.points,
       edges,
       metadata: {
-        source: file.name,
+        source: sourceUpload.fileName,
         springs: String(edges.length),
+        existing_springs: String(existingEdges.length),
+        generated_springs: String(newEdges.length),
       },
     };
     const text = serializeMeshV1(mesh);
-    return { mesh, text, sourceName: file.name };
+    return { mesh, text, sourceName: sourceUpload.fileName, generated: true };
   }
 
   generatedMeshFileName(): string {
-    return `${sanitizeDownloadStem(this.file?.name || "mesh")}_springs.mesh`;
+    return `${sanitizeDownloadStem(this.sourceUpload?.fileName || "mesh")}_springs.mesh`;
   }
 
   reset(): void {
-    this.file = null;
+    this.sourceUpload = null;
+    this.sourceText = "";
+    this.sourceMesh = null;
     this.jobName = "";
     this.jobNameEdited = false;
     this.config = { ...defaultConfig };
-    this.status = "Choose a point cloud to preview springs.";
+    this.status = "Pick a mesh to preview springs.";
     this.preparedMesh = null;
     this.previewRequestId++;
+    this.includeGeneratedSprings = true;
   }
+}
+
+function edgeKey(edge: { a: number; b: number }): string {
+  const a = Math.min(edge.a, edge.b);
+  const b = Math.max(edge.a, edge.b);
+  return `${a}:${b}`;
+}
+
+function springPreviewStatus(preview: PreparedMesh): string {
+  const existingCount = preview.mesh.edges.filter((edge) => edge.origin !== "generated").length;
+  const generatedCount = preview.mesh.edges.length - existingCount;
+  const parts = [];
+  if (existingCount > 0) parts.push(`${existingCount} existing`);
+  if (generatedCount > 0) parts.push(`${generatedCount} generated`);
+  const springText = parts.length > 0 ? parts.join(" and ") : "0";
+  return `${springText} springs from ${preview.mesh.points.length} points.`;
 }

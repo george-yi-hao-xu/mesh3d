@@ -4,6 +4,7 @@ import { AuthPanel } from "./components/AuthPanel";
 import { DeleteJobDialog } from "./components/DeleteJobDialog";
 import { JobForm } from "./components/JobForm";
 import { JobList } from "./components/JobList";
+import { MeshWarehouseDialog } from "./components/MeshWarehouseDialog";
 import { Topbar } from "./components/Topbar";
 import { ViewerPanel } from "./components/ViewerPanel";
 import { useStores } from "./stores/store-context";
@@ -31,6 +32,7 @@ export const App = observer(function App() {
         <AuthPanel />
       )}
       <DeleteJobDialog />
+      <MeshWarehouseDialog />
     </>
   );
 });

@@ -131,8 +131,13 @@ func currentUser(r *http.Request) *User {
 	return user
 }
 
-// handleUploads accepts a point-cloud file and stores it as an upload artifact.
+// handleUploads lists and stores user-owned warehouse mesh artifacts.
 func (a *App) handleUploads(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	if r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, a.store.ListUploads(user.ID))
+		return
+	}
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -150,14 +155,40 @@ func (a *App) handleUploads(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	user := currentUser(r)
-	upload, err := a.store.SaveUpload(user.ID, file, header)
+	upload, err := a.store.SaveUpload(user.ID, file, header, r.FormValue("meshKind"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, upload)
+}
+
+func (a *App) handleUploadRoutes(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	parts := splitPath(strings.TrimPrefix(r.URL.Path, "/api/uploads/"))
+	if len(parts) != 1 || !safePathPart(parts[0]) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	upload, ok := a.store.GetUploadForUser(user.ID, parts[0])
+	if !ok {
+		writeError(w, http.StatusNotFound, "upload not found")
+		return
+	}
+	data, err := os.ReadFile(upload.Path)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "file not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"upload": upload,
+		"text":   string(data),
+	})
 }
 
 // handleJobs lists existing jobs or creates a new solver job from an upload.

@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useRef } from "react";
+import { FormEvent } from "react";
 import { observer } from "mobx-react-lite";
 import type { SolverConfig } from "../types";
 import { defaultConfig } from "../stores/mesh-preview-store";
@@ -32,14 +32,9 @@ const fields: NumberField[] = [
 ];
 
 export const JobForm = observer(function JobForm() {
-  const { preview, jobs } = useStores();
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  const { preview, jobs, warehouse } = useStores();
 
-  function onFileChange(event: ChangeEvent<HTMLInputElement>): void {
-    preview.setFile(event.target.files?.[0] || null);
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function _submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     try {
       await jobs.submitJob();
@@ -48,13 +43,27 @@ export const JobForm = observer(function JobForm() {
     }
   }
 
+  const _isFormValid = Boolean(warehouse.selectedUpload) && preview.preparedMesh?.mesh.edges.length !== 0;
+
+  const _submitBtnTitle = jobs.submitting
+    ? "Starting job..."
+    : !warehouse.selectedUpload
+    ? "Select a mesh to run the job"
+    : preview.preparedMesh?.mesh.edges.length === 0
+    ? preview.includeGeneratedSprings
+      ? "The prepared mesh has no edges. Try adjusting the configuration."
+      : "The prepared mesh has no edges. Please enable spring generation to run the job."
+    : "";
+
   return (
     <>
       <h2>New Job</h2>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onSubmit={(event) => _submit(event)}>
         <label>
-          Point cloud .msh
-          <input ref={fileRef} name="pointCloud" type="file" accept=".msh,.txt" required onChange={onFileChange} />
+          Mesh
+          <button className="secondary mesh-picker-button" type="button" onClick={() => warehouse.openPicker()}>
+            {warehouse.selectedLabel}
+          </button>
         </label>
 
         <label>
@@ -80,9 +89,13 @@ export const JobForm = observer(function JobForm() {
         </div>
 
         <p className="spring-status">{preview.status}</p>
-        <button type="submit" disabled={jobs.submitting}>
+        <button className="run-solve-btn" type="submit" 
+          disabled={!_isFormValid || jobs.submitting}
+          title={_submitBtnTitle}
+        >
           {jobs.submitting ? "Starting" : "Run Solve"}
         </button>
+        <p className="disclaimer">{_submitBtnTitle}</p>
       </form>
     </>
   );

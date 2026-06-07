@@ -130,6 +130,88 @@ func TestJobsAndResultsAreUserScoped(t *testing.T) {
 
 }
 
+func TestUploadsAreUserScopedAndFetchable(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	bob, err := app.store.CreateUser("bob", "password123")
+	if err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	upload := saveTestUpload(t, app.store, alice.ID)
+
+	aliceList := request(handler, http.MethodGet, "/api/uploads", nil, authCookie(t, app, alice))
+	if aliceList.Code != http.StatusOK {
+		t.Fatalf("alice uploads status = %d, want %d", aliceList.Code, http.StatusOK)
+	}
+	var uploads []Upload
+	if err := json.Unmarshal(aliceList.Body.Bytes(), &uploads); err != nil {
+		t.Fatalf("decode alice uploads: %v", err)
+	}
+	if len(uploads) != 1 || uploads[0].ID != upload.ID || uploads[0].PointCount != 2 || uploads[0].EdgeCount != 1 {
+		t.Fatalf("alice uploads = %+v, want upload %s with metadata", uploads, upload.ID)
+	}
+
+	bobList := request(handler, http.MethodGet, "/api/uploads", nil, authCookie(t, app, bob))
+	if bobList.Code != http.StatusOK {
+		t.Fatalf("bob uploads status = %d, want %d", bobList.Code, http.StatusOK)
+	}
+	uploads = nil
+	if err := json.Unmarshal(bobList.Body.Bytes(), &uploads); err != nil {
+		t.Fatalf("decode bob uploads: %v", err)
+	}
+	if len(uploads) != 0 {
+		t.Fatalf("bob uploads = %+v, want none", uploads)
+	}
+
+	aliceFetch := request(handler, http.MethodGet, "/api/uploads/"+upload.ID, nil, authCookie(t, app, alice))
+	if aliceFetch.Code != http.StatusOK {
+		t.Fatalf("alice fetch upload status = %d, want %d", aliceFetch.Code, http.StatusOK)
+	}
+	if !strings.Contains(aliceFetch.Body.String(), "mesh-v1") {
+		t.Fatalf("alice fetch body did not include mesh text: %s", aliceFetch.Body.String())
+	}
+
+	bobFetch := request(handler, http.MethodGet, "/api/uploads/"+upload.ID, nil, authCookie(t, app, bob))
+	if bobFetch.Code != http.StatusNotFound {
+		t.Fatalf("bob fetch upload status = %d, want %d", bobFetch.Code, http.StatusNotFound)
+	}
+}
+
+func TestInvalidUploadIsRejected(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+
+	var body strings.Builder
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("pointCloud", "bad.mesh")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write([]byte("not a mesh\n")); err != nil {
+		t.Fatalf("write form file: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/uploads", strings.NewReader(body.String()))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.AddCookie(authCookie(t, app, alice))
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("invalid upload status = %d, want %d; body: %s", res.Code, http.StatusBadRequest, res.Body.String())
+	}
+}
+
 func TestDeleteJobIsOwnedAndOnlyForFinishedJobs(t *testing.T) {
 	app, handler := newTestApp(t)
 	alice, err := app.store.CreateUser("alice", "password123")
@@ -226,6 +308,7 @@ func newTestApp(t *testing.T) (*App, http.Handler) {
 	mux.HandleFunc("/api/auth/logout", app.handleLogout)
 	mux.HandleFunc("/api/auth/me", app.handleMe)
 	mux.HandleFunc("/api/uploads", app.requireAuth(app.handleUploads))
+	mux.HandleFunc("/api/uploads/", app.requireAuth(app.handleUploadRoutes))
 	mux.HandleFunc("/api/jobs", app.requireAuth(app.handleJobs))
 	mux.HandleFunc("/api/jobs/", app.requireAuth(app.handleJobRoutes))
 	return app, mux
@@ -263,7 +346,7 @@ edges
 		t.Fatalf("seek temp upload: %v", err)
 	}
 
-	upload, err := store.SaveUpload(userID, file, &multipart.FileHeader{Filename: "input.mesh"})
+	upload, err := store.SaveUpload(userID, file, &multipart.FileHeader{Filename: "input.mesh"}, "uploaded")
 	if err != nil {
 		t.Fatalf("save upload: %v", err)
 	}

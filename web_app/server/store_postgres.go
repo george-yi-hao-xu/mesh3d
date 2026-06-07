@@ -115,8 +115,11 @@ func (s *Store) getUserPostgres(id string) (*User, bool) {
 func (s *Store) saveUploadPostgres(upload Upload) error {
 	objectKey := filepath.ToSlash(filepath.Join("uploads", upload.ID+".mesh"))
 	_, err := s.db.Exec(
-		`insert into uploads (id, user_id, file_name, size_bytes, object_key, created_at) values ($1, $2, $3, $4, $5, $6)`,
-		upload.ID, upload.UserID, upload.FileName, upload.Size, objectKey, upload.CreatedAt,
+		`insert into uploads (
+			id, user_id, file_name, size_bytes, object_key, mesh_kind, point_count, edge_count, created_at
+		) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		upload.ID, upload.UserID, upload.FileName, upload.Size, objectKey, upload.MeshKind,
+		upload.PointCount, upload.EdgeCount, upload.CreatedAt,
 	)
 	return err
 }
@@ -125,14 +128,45 @@ func (s *Store) uploadForUser(uploadID, userID string) (Upload, bool) {
 	var upload Upload
 	var objectKey string
 	err := s.db.QueryRow(
-		`select id, user_id, file_name, size_bytes, object_key, created_at from uploads where id = $1 and user_id = $2`,
+		`select id, user_id, file_name, size_bytes, object_key, mesh_kind, coalesce(point_count, 0), coalesce(edge_count, 0), created_at
+		 from uploads where id = $1 and user_id = $2`,
 		uploadID, userID,
-	).Scan(&upload.ID, &upload.UserID, &upload.FileName, &upload.Size, &objectKey, &upload.CreatedAt)
+	).Scan(&upload.ID, &upload.UserID, &upload.FileName, &upload.Size, &objectKey, &upload.MeshKind, &upload.PointCount, &upload.EdgeCount, &upload.CreatedAt)
 	if err != nil {
 		return Upload{}, false
 	}
 	upload.Path = s.artifactPath(objectKey)
 	return upload, true
+}
+
+func (s *Store) listUploadsPostgres(userID string) []Upload {
+	rows, err := s.db.Query(`
+		select id, user_id, file_name, size_bytes, object_key, mesh_kind,
+		       coalesce(point_count, 0), coalesce(edge_count, 0), created_at
+		from uploads
+		where user_id = $1
+		order by created_at desc`, userID)
+	if err != nil {
+		log.Printf("list uploads: %v", err)
+		return []Upload{}
+	}
+	defer rows.Close()
+
+	uploads := make([]Upload, 0)
+	for rows.Next() {
+		var upload Upload
+		var objectKey string
+		if err := rows.Scan(
+			&upload.ID, &upload.UserID, &upload.FileName, &upload.Size, &objectKey, &upload.MeshKind,
+			&upload.PointCount, &upload.EdgeCount, &upload.CreatedAt,
+		); err != nil {
+			log.Printf("scan upload: %v", err)
+			continue
+		}
+		upload.Path = s.artifactPath(objectKey)
+		uploads = append(uploads, upload)
+	}
+	return uploads
 }
 
 func (s *Store) insertJobPostgres(job *Job) error {

@@ -1,5 +1,5 @@
 import { parseMeshData } from "./mesh-parser";
-import type { AppError, Job, JobFrameResponse, MeshFrame, Upload, User } from "../types";
+import type { AppError, Job, JobFrameResponse, MeshFrame, Upload, UploadArtifact, User } from "../types";
 
 export async function getMe(): Promise<{ user: User }> {
   const res = await fetch("/api/auth/me");
@@ -35,18 +35,29 @@ export async function checkHealth(): Promise<{ status: string }> {
   return readJSON(res);
 }
 
-export async function uploadMeshArtifact(file: File | Blob | undefined, fileName = ""): Promise<Upload> {
+export async function uploadMeshArtifact(file: File | Blob | undefined, fileName = "", meshKind: "uploaded" | "generated" = "uploaded"): Promise<Upload> {
   if (!file) {
-    throw new Error("Choose a point cloud file first.");
+    throw new Error("Choose a mesh file first.");
   }
 
   const body = new FormData();
   body.append("pointCloud", file, fileName || (file instanceof File ? file.name : "") || "mesh.mesh");
+  body.append("meshKind", meshKind);
 
   const res = await fetch("/api/uploads", {
     method: "POST",
     body,
   });
+  return readJSON(res);
+}
+
+export async function listUploads(): Promise<Upload[]> {
+  const res = await fetch("/api/uploads");
+  return readJSON(res);
+}
+
+export async function fetchUploadArtifact(uploadId: string): Promise<UploadArtifact> {
+  const res = await fetch(`/api/uploads/${uploadId}`);
   return readJSON(res);
 }
 

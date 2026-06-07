@@ -11,6 +11,9 @@ create table if not exists uploads (
   file_name text not null,
   size_bytes bigint not null,
   object_key text not null,
+  mesh_kind text not null default 'uploaded',
+  point_count integer,
+  edge_count integer,
   created_at timestamptz not null
 );
 
@@ -44,7 +47,6 @@ create table if not exists job_snapshots (
   created_at timestamptz not null
 );
 
-drop index if exists users_username_lower_idx;
 create unique index if not exists users_username_lower_idx on users (lower(username));
 create index if not exists uploads_user_id_created_at_idx on uploads (user_id, created_at desc);
 create index if not exists jobs_user_id_created_at_idx on jobs (user_id, created_at desc);

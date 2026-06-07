@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,12 +83,15 @@ func (s *Store) GetUser(id string) (*User, bool) {
 	return s.getUserPostgres(id)
 }
 
-// SaveUpload persists an uploaded point-cloud file and its metadata.
-func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart.FileHeader) (Upload, error) {
+// SaveUpload persists an uploaded mesh file and its metadata.
+func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart.FileHeader, meshKind string) (Upload, error) {
 	id := newID("upl")
 	fileName := filepath.Base(header.Filename)
 	if fileName == "." || fileName == string(filepath.Separator) || fileName == "" {
 		fileName = "mesh.mesh"
+	}
+	if meshKind != "generated" {
+		meshKind = "uploaded"
 	}
 
 	path := s.uploadMeshPath(id)
@@ -98,19 +105,41 @@ func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart
 	if err != nil {
 		return Upload{}, err
 	}
+	if err := out.Close(); err != nil {
+		return Upload{}, err
+	}
+
+	pointCount, edgeCount, err := inspectMeshFile(path)
+	if err != nil {
+		_ = os.Remove(path)
+		return Upload{}, err
+	}
 
 	upload := Upload{
-		ID:        id,
-		UserID:    userID,
-		FileName:  fileName,
-		Size:      size,
-		Path:      path,
-		CreatedAt: time.Now().UTC(),
+		ID:         id,
+		UserID:     userID,
+		FileName:   fileName,
+		Size:       size,
+		MeshKind:   meshKind,
+		PointCount: pointCount,
+		EdgeCount:  edgeCount,
+		Path:       path,
+		CreatedAt:  time.Now().UTC(),
 	}
 	if err := s.saveUploadPostgres(upload); err != nil {
 		return Upload{}, err
 	}
 	return upload, nil
+}
+
+// ListUploads returns user-owned stored mesh artifacts.
+func (s *Store) ListUploads(userID string) []Upload {
+	return s.listUploadsPostgres(userID)
+}
+
+// GetUploadForUser returns a stored mesh artifact only when it belongs to the requested user.
+func (s *Store) GetUploadForUser(userID, uploadID string) (Upload, bool) {
+	return s.uploadForUser(uploadID, userID)
 }
 
 // CreateJob creates a job folder with input copied from a prior upload.
@@ -160,6 +189,99 @@ func defaultJobName(createdAt time.Time, inputName string) string {
 		meshName = "mesh"
 	}
 	return createdAt.Format("2006-01-02_15-04-05") + "_" + meshName
+}
+
+func inspectMeshFile(path string) (int, int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	section := ""
+	hasMeshFormat := false
+	pointCount := 0
+	edgeCount := 0
+	lineNumber := 0
+	for scanner.Scan() {
+		lineNumber++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			if strings.EqualFold(strings.TrimSpace(strings.TrimPrefix(line, "# Format:")), "mesh-v1") {
+				hasMeshFormat = true
+			}
+			continue
+		}
+
+		lower := strings.ToLower(line)
+		if lower == "vertices" || lower == "edges" {
+			section = lower
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if hasMeshFormat {
+			switch section {
+			case "vertices":
+				if len(fields) < 6 {
+					return 0, 0, fmt.Errorf("invalid mesh vertex line %d", lineNumber)
+				}
+				if _, err := strconv.Atoi(fields[0]); err != nil {
+					return 0, 0, fmt.Errorf("invalid mesh vertex index on line %d", lineNumber)
+				}
+				for _, raw := range []string{fields[1], fields[2], fields[3], fields[5]} {
+					if _, err := strconv.ParseFloat(raw, 64); err != nil {
+						return 0, 0, fmt.Errorf("invalid mesh vertex value on line %d", lineNumber)
+					}
+				}
+				pointCount++
+			case "edges":
+				if len(fields) < 2 {
+					return 0, 0, fmt.Errorf("invalid mesh edge line %d", lineNumber)
+				}
+				if _, err := strconv.Atoi(fields[0]); err != nil {
+					return 0, 0, fmt.Errorf("invalid mesh edge value on line %d", lineNumber)
+				}
+				if _, err := strconv.Atoi(fields[1]); err != nil {
+					return 0, 0, fmt.Errorf("invalid mesh edge value on line %d", lineNumber)
+				}
+				edgeCount++
+			default:
+				return 0, 0, fmt.Errorf("mesh line %d appears before vertices or edges section", lineNumber)
+			}
+			continue
+		}
+
+		if len(fields) < 3 {
+			continue
+		}
+		x, errX := strconv.ParseFloat(fields[0], 64)
+		y, errY := strconv.ParseFloat(fields[1], 64)
+		z, errZ := strconv.ParseFloat(fields[2], 64)
+		if errX == nil && errY == nil && errZ == nil && finite3(x, y, z) {
+			pointCount++
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, 0, err
+	}
+	if pointCount == 0 {
+		return 0, 0, errors.New("no valid mesh points found")
+	}
+	return pointCount, edgeCount, nil
+}
+
+func finite3(values ...float64) bool {
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return true
 }
 
 // ListJobs returns user-owned job records.
