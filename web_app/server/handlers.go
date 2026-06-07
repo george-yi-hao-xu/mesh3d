@@ -311,7 +311,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, path string) {
 	http.ServeFile(w, r, path)
 }
 
-// handleStatic serves the vanilla JS client from the configured client directory.
+// handleStatic serves the frontend client from the configured client directory.
 func (a *App) handleStatic(w http.ResponseWriter, r *http.Request) {
 	path := filepath.Clean(r.URL.Path)
 	if path == "." || path == string(filepath.Separator) {

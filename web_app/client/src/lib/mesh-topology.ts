@@ -1,15 +1,6 @@
-/**
- * @param {import("./mesh-parser.js").Point3[]} points
- * @param {{
- *   springSeed: number,
- *   maxSpringDist: number,
- *   maxSpringsPerParticle: number,
- *   springConnectProb: number,
- *   stiffness: number
- * }} config
- * @returns {import("./mesh-parser.js").Edge[]}
- */
-export function generateSprings(points, config) {
+import type { Edge, MeshData, Point3, SolverConfig } from "../types";
+
+export function generateSprings(points: Point3[], config: Pick<SolverConfig, "springSeed" | "maxSpringDist" | "maxSpringsPerParticle" | "springConnectProb" | "stiffness">): Edge[] {
   const maxDist = Number(config.maxSpringDist);
   const maxPerParticle = Math.floor(Number(config.maxSpringsPerParticle));
   const prob = Math.min(1, Math.max(0, Number(config.springConnectProb)));
@@ -21,8 +12,8 @@ export function generateSprings(points, config) {
   }
 
   const maxDistSq = maxDist * maxDist;
-  const candidates = Array.from({ length: points.length }, () => []);
-  const connectionCount = Array(points.length).fill(0);
+  const candidates: Array<Array<{ index: number; dist: number }>> = Array.from({ length: points.length }, () => []);
+  const connectionCount = Array(points.length).fill(0) as number[];
 
   for (let i = 0; i < points.length; i++) {
     for (let j = i + 1; j < points.length; j++) {
@@ -38,7 +29,7 @@ export function generateSprings(points, config) {
   }
 
   const random = seededRandom(seed);
-  const edges = [];
+  const edges: Edge[] = [];
   for (let i = 0; i < candidates.length; i++) {
     for (const candidate of candidates[i]) {
       const j = candidate.index;
@@ -60,11 +51,7 @@ export function generateSprings(points, config) {
   return edges;
 }
 
-/**
- * @param {{ points: import("./mesh-parser.js").Point3[], edges: import("./mesh-parser.js").Edge[] }} mesh
- * @returns {string}
- */
-export function serializeMeshV1(mesh) {
+export function serializeMeshV1(mesh: Pick<MeshData, "points" | "edges">): string {
   const lines = [
     "# Mesh3D browser generated mesh",
     "# Format: mesh-v1",
@@ -99,33 +86,18 @@ export function serializeMeshV1(mesh) {
   return lines.join("\n");
 }
 
-/**
- * @param {number} value
- * @returns {string}
- */
-function formatNumber(value) {
+function formatNumber(value: number): string {
   return Number(value).toFixed(6);
 }
 
-/**
- * @param {Array<any>} items
- * @param {() => number} random
- * @returns {void}
- */
-function shuffle(items, random) {
+function shuffle<T>(items: T[], random: () => number): void {
   for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [items[i], items[j]] = [items[j], items[i]];
   }
 }
 
-/**
- * Returns a deterministic 32-bit PRNG.
- *
- * @param {number} seed
- * @returns {() => number}
- */
-function seededRandom(seed) {
+function seededRandom(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
     state += 0x6d2b79f5;
@@ -136,11 +108,6 @@ function seededRandom(seed) {
   };
 }
 
-/**
- * @param {import("./mesh-parser.js").Point3} a
- * @param {import("./mesh-parser.js").Point3} b
- * @returns {number}
- */
-function squaredDistance(a, b) {
+function squaredDistance(a: Point3, b: Point3): number {
   return ((a.x - b.x) ** 2) + ((a.y - b.y) ** 2) + ((a.z - b.z) ** 2);
 }

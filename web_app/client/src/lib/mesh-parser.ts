@@ -1,34 +1,14 @@
-/**
- * @typedef {{ x: number, y: number, z: number, fixed: boolean, mass: number }} Point3
- * @typedef {{ a: number, b: number, restLength: number, stiffness: number }} Edge
- * @typedef {{ points: Point3[], edges: Edge[], metadata: Record<string, string> }} MeshData
- * @typedef {{ minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number }} PointBounds
- * @typedef {{ points: Point3[], min: { x: number, y: number, z: number }, max: { x: number, y: number, z: number }, span: number }} NormalizedPointCloud
- */
+import type { Edge, MeshData, NormalizedPointCloud, Point3, PointBounds } from "../types";
 
-/**
- * Parses either a mesh-v1 solver artifact or the legacy `.msh` point-cloud format.
- *
- * @param {string} text
- * @returns {MeshData}
- * @throws {Error} When no valid point rows are found.
- */
-export function parseMeshData(text) {
+export function parseMeshData(text: string): MeshData {
   return /^\s*#\s*Format:\s*mesh-v1\b/im.test(text)
     ? parseMeshSnapshot(text)
     : parsePointCloud(text);
 }
 
-/**
- * Parses the legacy text `.msh` point-cloud format.
- *
- * @param {string} text
- * @returns {MeshData}
- * @throws {Error} When no valid point rows are found.
- */
-export function parsePointCloud(text) {
-  const points = [];
-  const metadata = {};
+export function parsePointCloud(text: string): MeshData {
+  const points: Point3[] = [];
+  const metadata: Record<string, string> = {};
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -66,16 +46,10 @@ export function parsePointCloud(text) {
   return { points, edges: [], metadata };
 }
 
-/**
- * Parses the mesh-v1 text format written by solver snapshots.
- *
- * @param {string} text
- * @returns {MeshData}
- */
-function parseMeshSnapshot(text) {
-  const points = [];
-  const edges = [];
-  const metadata = {};
+function parseMeshSnapshot(text: string): MeshData {
+  const points: Point3[] = [];
+  const edges: Edge[] = [];
+  const metadata: Record<string, string> = {};
   let section = "";
 
   for (const rawLine of text.split(/\r?\n/)) {
@@ -149,14 +123,8 @@ function parseMeshSnapshot(text) {
   return { points, edges, metadata };
 }
 
-/**
- * Computes raw coordinate bounds for one or more point sets.
- *
- * @param {Point3[][]} pointSets
- * @returns {PointBounds | null}
- */
-export function computePointBounds(pointSets) {
-  const bounds = {
+export function computePointBounds(pointSets: Point3[][]): PointBounds | null {
+  const bounds: PointBounds = {
     minX: Infinity,
     minY: Infinity,
     minZ: Infinity,
@@ -181,13 +149,7 @@ export function computePointBounds(pointSets) {
   return count > 0 ? bounds : null;
 }
 
-/**
- * Returns the viewport scale used to normalize raw coordinates.
- *
- * @param {PointBounds} bounds
- * @returns {number}
- */
-export function pointBoundsScale(bounds) {
+export function pointBoundsScale(bounds: PointBounds): number {
   const maxSpan = Math.max(
     Math.abs(bounds.minX),
     Math.abs(bounds.maxX),
@@ -200,14 +162,7 @@ export function pointBoundsScale(bounds) {
   return 16 / maxSpan;
 }
 
-/**
- * Scales points into a stable Three.js viewing range while preserving the true `(0, 0, 0)` origin.
- *
- * @param {Point3[]} points
- * @param {PointBounds | null} [referenceBounds]
- * @returns {NormalizedPointCloud}
- */
-export function normalizePoints(points, referenceBounds = null) {
+export function normalizePoints(points: Point3[], referenceBounds: PointBounds | null = null): NormalizedPointCloud {
   const bounds = referenceBounds || computePointBounds([points]) || {
     minX: 0,
     minY: 0,
@@ -218,7 +173,6 @@ export function normalizePoints(points, referenceBounds = null) {
   };
 
   const scale = pointBoundsScale(bounds);
-
   const normalizedPoints = points.map((point) => ({
     x: point.x * scale,
     y: point.y * scale,
@@ -257,61 +211,4 @@ export function normalizePoints(points, referenceBounds = null) {
     },
     span: 16,
   };
-}
-
-/**
- * Infers local line segments for callers that explicitly want a legacy point-cloud approximation.
- *
- * @param {Point3[]} points
- * @returns {Edge[]}
- */
-export function inferEdges(points) {
-  if (points.length < 2 || points.length > 2500) return [];
-
-  const nearestDistances = [];
-  for (let i = 0; i < points.length; i++) {
-    let nearest = Infinity;
-    for (let j = 0; j < points.length; j++) {
-      if (i === j) continue;
-      nearest = Math.min(nearest, squaredDistance(points[i], points[j]));
-    }
-    if (Number.isFinite(nearest)) nearestDistances.push(Math.sqrt(nearest));
-  }
-
-  nearestDistances.sort((a, b) => a - b);
-  const medianNearest = nearestDistances[Math.floor(nearestDistances.length / 2)] || 1;
-  const maxDistSq = (medianNearest * 3.5) ** 2;
-  const edges = new Set();
-
-  for (let i = 0; i < points.length; i++) {
-    const candidates = [];
-    for (let j = 0; j < points.length; j++) {
-      if (i === j) continue;
-      const distSq = squaredDistance(points[i], points[j]);
-      if (distSq <= maxDistSq) candidates.push({ index: j, distSq });
-    }
-
-    candidates.sort((a, b) => a.distSq - b.distSq);
-    for (const candidate of candidates.slice(0, 4)) {
-      const a = Math.min(i, candidate.index);
-      const b = Math.max(i, candidate.index);
-      edges.add(`${a}:${b}`);
-    }
-  }
-
-  return Array.from(edges, (edge) => {
-    const [a, b] = edge.split(":").map(Number);
-    return { a, b, restLength: 0, stiffness: 0 };
-  });
-}
-
-/**
- * Computes squared Euclidean distance without allocating temporary vectors.
- *
- * @param {Point3} a
- * @param {Point3} b
- * @returns {number}
- */
-function squaredDistance(a, b) {
-  return ((a.x - b.x) ** 2) + ((a.y - b.y) ** 2) + ((a.z - b.z) ** 2);
 }

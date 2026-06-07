@@ -4,7 +4,7 @@ This folder contains the server-backed web workflow for Mesh3D.
 
 ## Current Stack
 
-- Frontend: vanilla HTML/CSS/JS
+- Frontend: React, TypeScript, MobX, Vite
 - Backend: Go `net/http`
 - Database: Postgres metadata
 - Storage: local filesystem `.mesh` uploads and solver artifacts
@@ -22,7 +22,22 @@ docker run --name mesh3d-postgres \
   -d postgres:16
 ```
 
-Then run the server. It loads `server/.env` automatically:
+Start the frontend on the local machine:
+```bash
+cd web_app/client
+pnpm i
+pnpm dev
+```
+
+Build the frontend:
+
+```bash
+cd web_app/client
+pnpm install
+pnpm build
+```
+
+Then run the server. It loads `server/.env` automatically and serves the built frontend from `client/dist` unless `MESH3D_CLIENT_DIR` overrides it:
 
 ```bash
 cd web_app/server
@@ -110,11 +125,20 @@ That serves files from `web_app/client`, including:
 
 ```text
 index.html
-app.js
+assets/
 styles.css
 ```
 
 This is why `main.go` has `clientDir`: the backend currently serves the frontend too.
+
+During frontend development, run the Go server on `:8080` and start Vite separately:
+
+```bash
+cd web_app/client
+pnpm dev
+```
+
+Vite proxies `/api` requests to `http://127.0.0.1:8080`.
 
 ### 2. Browser Previews and Uploads Mesh Topology
 

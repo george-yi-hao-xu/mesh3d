@@ -1,0 +1,38 @@
+.mesh-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  background: #101820;
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.mesh-message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #c9d4df;
+  text-align: center;
+
+  &.hidden {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .mesh-canvas {
+    min-height: 420px;
+    height: 60vh;
+    max-height: none;
+  }
+}

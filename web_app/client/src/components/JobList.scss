@@ -1,0 +1,31 @@
+.job-list {
+  display: grid;
+  gap: 8px;
+}
+
+.job-item {
+  width: 100%;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  background: #fbfcfe;
+  color: #18202a;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px;
+  cursor: pointer;
+
+  &.active {
+    border-color: var(--accent-color);
+    background: #eef5ff;
+  }
+}
+
+.job-title {
+  font-weight: 700;
+}
+
+.job-meta {
+  color: #607080;
+  font-size: 12px;
+}

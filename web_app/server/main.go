@@ -15,7 +15,7 @@ func main() {
 
 	addr := envOr("MESH3D_ADDR", ":8080")
 	storageDir := envOr("MESH3D_STORAGE_DIR", "storage")
-	clientDir := envOr("MESH3D_CLIENT_DIR", "../client")
+	clientDir := envOr("MESH3D_CLIENT_DIR", "../client/dist")
 	databaseURL := strings.TrimSpace(os.Getenv("MESH3D_DATABASE_URL"))
 	if databaseURL == "" {
 		log.Fatal("MESH3D_DATABASE_URL is required")

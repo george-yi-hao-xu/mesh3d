@@ -14,5 +14,7 @@
 
 # Mesh3D web app runtime storage
 web_app/server/storage/
+web_app/client/node_modules/
+web_app/client/dist/
 
 build/
