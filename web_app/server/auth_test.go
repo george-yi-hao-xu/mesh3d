@@ -130,6 +130,28 @@ func TestJobsAndResultsAreUserScoped(t *testing.T) {
 
 }
 
+func TestCreateJobRejectsUploadWithoutSprings(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	upload := saveTestUploadWithoutSprings(t, app.store, alice.ID)
+
+	res := postJSON(handler, "/api/jobs", `{"uploadId":"`+upload.ID+`","name":"springless job","config":{"maxSimTime":1}}`, authCookie(t, app, alice))
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("create job status = %d, want %d; body: %s", res.Code, http.StatusBadRequest, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), "springs") {
+		t.Fatalf("create job body = %q, want springs error", res.Body.String())
+	}
+
+	jobs := app.store.ListJobs(alice.ID)
+	if len(jobs) != 0 {
+		t.Fatalf("jobs after rejected create = %+v, want none", jobs)
+	}
+}
+
 func TestUploadsAreUserScopedAndFetchable(t *testing.T) {
 	app, handler := newTestApp(t)
 	alice, err := app.store.CreateUser("alice", "password123")
@@ -349,6 +371,38 @@ edges
 	upload, err := store.SaveUpload(userID, file, &multipart.FileHeader{Filename: "input.mesh"}, "uploaded")
 	if err != nil {
 		t.Fatalf("save upload: %v", err)
+	}
+	return upload
+}
+
+func saveTestUploadWithoutSprings(t *testing.T, store *Store, userID string) Upload {
+	t.Helper()
+
+	file, err := os.CreateTemp(t.TempDir(), "input-springless-*.mesh")
+	if err != nil {
+		t.Fatalf("create temp upload: %v", err)
+	}
+	defer file.Close()
+	if _, err := file.WriteString(`# Format: mesh-v1
+
+vertices
+0 0 0 0 1 1
+1 1 0 0 0 1
+
+edges
+`); err != nil {
+		t.Fatalf("write temp upload: %v", err)
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		t.Fatalf("seek temp upload: %v", err)
+	}
+
+	upload, err := store.SaveUpload(userID, file, &multipart.FileHeader{Filename: "input-springless.mesh"}, "uploaded")
+	if err != nil {
+		t.Fatalf("save upload: %v", err)
+	}
+	if upload.EdgeCount != 0 {
+		t.Fatalf("springless upload edge count = %d, want 0", upload.EdgeCount)
 	}
 	return upload
 }

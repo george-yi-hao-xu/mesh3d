@@ -1,8 +1,14 @@
 import { makeAutoObservable, runInAction } from "mobx";
 import { createJob, deleteJob, fetchJob, fetchMeshData, listJobs } from "../lib/api";
 import { formatSeconds, jobTitle, sanitizeDownloadStem } from "../lib/format";
-import type { AppError, Job, MeshFrame, PreparedMesh } from "../types";
+import type { AppError, Job, MeshData, MeshFrame, PreparedMesh } from "../types";
 import type { RootStore } from "./root-store";
+
+export enum ViewerMode {
+  Empty = "empty",
+  Preview = "preview",
+  Job = "job",
+}
 
 export class JobStore {
   readonly root: RootStore;
@@ -37,6 +43,30 @@ export class JobStore {
 
   get selectedFrameIndex(): number {
     return Math.max(0, this.activeFrames.findIndex((frame) => frame.url === this.activeFrameUrl));
+  }
+
+  get viewerMode(): ViewerMode {
+    if (this.activePreview) return ViewerMode.Preview;
+    if (this.activeJob) return ViewerMode.Job;
+    return ViewerMode.Empty;
+  }
+
+  get canToggleGeneratedSprings(): boolean {
+    return this.viewerMode === ViewerMode.Preview;
+  }
+
+  get reserveSpringDisplay(): boolean {
+    return this.viewerMode !== ViewerMode.Empty;
+  }
+
+  get springLegendMesh(): MeshData | null {
+    if (this.viewerMode === ViewerMode.Preview) {
+      return this.activePreview?.mesh || null;
+    }
+    if (this.viewerMode === ViewerMode.Job) {
+      return this.selectedFrame?.pointCloud || this.firstLoadedFrameMesh;
+    }
+    return null;
   }
 
   get activeTitle(): string {
@@ -78,6 +108,10 @@ export class JobStore {
     const prefix = sanitizeDownloadStem(jobTitle(job) || "mesh");
     const suffix = frame.url.endsWith("/result") ? "final.mesh" : frame.url.split("/").pop() || "mesh.mesh";
     return `${prefix}_${suffix}`;
+  }
+
+  get firstLoadedFrameMesh(): MeshData | null {
+    return this.activeFrames.find((frame) => frame.loaded && frame.pointCloud?.edges)?.pointCloud || null;
   }
 
   async refreshJobs(): Promise<void> {

@@ -148,6 +148,9 @@ func (s *Store) CreateJob(userID, uploadID, name string, config map[string]inter
 	if !ok {
 		return nil, errors.New("upload not found")
 	}
+	if upload.EdgeCount <= 0 {
+		return nil, errors.New("mesh contains no springs; enable generated springs or upload a mesh with existing springs")
+	}
 
 	id := newID("job")
 	if err := os.MkdirAll(s.jobSnapshotDir(id), 0755); err != nil {

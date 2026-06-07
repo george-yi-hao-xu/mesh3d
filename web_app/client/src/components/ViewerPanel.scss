@@ -34,7 +34,12 @@
   gap: 12px 16px;
   align-items: center;
   flex-wrap: wrap;
+  min-height: 19px;
   margin: -2px 0 10px;
+
+  &.empty-legend .spring-legend {
+    visibility: hidden;
+  }
 }
 
 .spring-legend {

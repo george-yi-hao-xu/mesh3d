@@ -3,11 +3,11 @@ import { MeshCanvas } from "./MeshCanvas";
 import { TimelineControls } from "./TimelineControls";
 import { useStores } from "../stores/store-context";
 import "./ViewerPanel.scss";
+import { ViewerMode } from "../stores/job-store";
 
 export const ViewerPanel = observer(function ViewerPanel() {
   const { jobs, preview, warehouse } = useStores();
-  const edgeLegend = getEdgeLegend(jobs.activePreview?.mesh || jobs.selectedFrame?.pointCloud || null);
-  const canToggleGeneratedSprings = Boolean(preview.sourceMesh && (jobs.activePreview || !jobs.activeJob));
+  const edgeLegend = getEdgeLegend(jobs.springLegendMesh);
 
   return (
     <section className="panel viewer">
@@ -36,19 +36,18 @@ export const ViewerPanel = observer(function ViewerPanel() {
       </div>
 
       {jobs.activeInputName ? <p className="input-name">{jobs.activeInputName}</p> : null}
-      {edgeLegend.length > 0 || canToggleGeneratedSprings ? (
-        <div className="spring-display-row">
-          {canToggleGeneratedSprings ? (
-            <label className="spring-toggle">
-              <input
-                type="checkbox"
-                checked={preview.includeGeneratedSprings}
-                onChange={(event) => preview.setIncludeGeneratedSprings(event.target.checked)}
-              />
-              Enable Springs Generation
-            </label>
-          ) : null}
-          {edgeLegend.length > 0 ? (
+      {jobs.reserveSpringDisplay ? (
+        <div className={`spring-display-row ${edgeLegend.length === 0 ? "empty-legend" : ""}`}>
+          <label className="spring-toggle">
+            <input
+              disabled={!jobs.canToggleGeneratedSprings}
+              type="checkbox"
+              checked={preview.includeGeneratedSprings}
+              onChange={(event) => preview.setIncludeGeneratedSprings(event.target.checked)}
+            />
+            {jobs.canToggleGeneratedSprings ? "Enable Springs Generation" : "Spring generation is only available in preview mode"}
+          </label>
+          {jobs.viewerMode === ViewerMode.Preview ? (
             <div className="spring-legend" aria-label="Spring legend">
               {edgeLegend.map((item) => (
                 <span key={item.kind} className={`spring-legend-item ${item.kind}`}>
@@ -57,7 +56,7 @@ export const ViewerPanel = observer(function ViewerPanel() {
                 </span>
               ))}
             </div>
-          ) : null}
+          ) : <div className="spring-legend"></div>}
         </div>
       ) : null}
       <TimelineControls />

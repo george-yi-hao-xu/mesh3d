@@ -1,4 +1,4 @@
-import { makeAutoObservable, runInAction } from "mobx";
+import { computed, makeAutoObservable, runInAction } from "mobx";
 import { defaultJobName, sanitizeDownloadStem } from "../lib/format";
 import { generateSprings, serializeMeshV1 } from "../lib/mesh-topology";
 import type { MeshData, PreparedMesh, SolverConfig, Upload } from "../types";
@@ -170,6 +170,7 @@ export class MeshPreviewStore {
     this.previewRequestId++;
     this.includeGeneratedSprings = true;
   }
+
 }
 
 function edgeKey(edge: { a: number; b: number }): string {
