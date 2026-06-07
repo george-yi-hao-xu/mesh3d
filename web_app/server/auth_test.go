@@ -203,6 +203,69 @@ func TestUploadsAreUserScopedAndFetchable(t *testing.T) {
 	}
 }
 
+func TestDeleteUploadRequiresOwnershipAndNoJobs(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	bob, err := app.store.CreateUser("bob", "password123")
+	if err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	upload := saveTestUpload(t, app.store, alice.ID)
+
+	bobDelete := request(handler, http.MethodDelete, "/api/uploads/"+upload.ID, nil, authCookie(t, app, bob))
+	if bobDelete.Code != http.StatusNotFound {
+		t.Fatalf("bob delete upload status = %d, want %d", bobDelete.Code, http.StatusNotFound)
+	}
+	if _, ok := app.store.GetUploadForUser(alice.ID, upload.ID); !ok {
+		t.Fatalf("upload was removed by non-owner")
+	}
+
+	aliceDelete := request(handler, http.MethodDelete, "/api/uploads/"+upload.ID, nil, authCookie(t, app, alice))
+	if aliceDelete.Code != http.StatusNoContent {
+		t.Fatalf("alice delete upload status = %d, want %d; body: %s", aliceDelete.Code, http.StatusNoContent, aliceDelete.Body.String())
+	}
+	if _, ok := app.store.GetUploadForUser(alice.ID, upload.ID); ok {
+		t.Fatalf("upload still exists after delete")
+	}
+}
+
+func TestDeleteUploadRejectsReferencedUpload(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	upload := saveTestUpload(t, app.store, alice.ID)
+	job, err := app.store.CreateJob(alice.ID, upload.ID, "alice job", map[string]interface{}{"maxSimTime": 1})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	res := request(handler, http.MethodDelete, "/api/uploads/"+upload.ID, nil, authCookie(t, app, alice))
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("delete referenced upload status = %d, want %d; body: %s", res.Code, http.StatusBadRequest, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), "existing jobs") {
+		t.Fatalf("delete referenced upload body = %q, want existing jobs error", res.Body.String())
+	}
+	var body struct {
+		RelatedJobIDs []string `json:"relatedJobIds"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode referenced upload response: %v", err)
+	}
+	if len(body.RelatedJobIDs) != 1 || body.RelatedJobIDs[0] != job.ID {
+		t.Fatalf("related job ids = %+v, want %s", body.RelatedJobIDs, job.ID)
+	}
+	if _, ok := app.store.GetUploadForUser(alice.ID, upload.ID); !ok {
+		t.Fatalf("referenced upload was deleted")
+	}
+}
+
 func TestInvalidUploadIsRejected(t *testing.T) {
 	app, handler := newTestApp(t)
 	alice, err := app.store.CreateUser("alice", "password123")

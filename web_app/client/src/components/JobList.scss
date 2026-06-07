@@ -1,3 +1,15 @@
+.job-list-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.clear-job-highlights {
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
 .job-list {
   display: grid;
   gap: 8px;
@@ -18,6 +30,17 @@
   &.active {
     border-color: var(--accent-color);
     background: #eef5ff;
+  }
+
+  &.highlighted {
+    border-color: #f5c542;
+    box-shadow: 0 0 0 2px rgba(245, 197, 66, 0.32);
+    background: #fff9df;
+  }
+
+  &.active.highlighted {
+    border-color: #d9a800;
+    background: linear-gradient(0deg, rgba(245, 197, 66, 0.18), rgba(245, 197, 66, 0.18)), #eef5ff;
   }
 }
 

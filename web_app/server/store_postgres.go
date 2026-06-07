@@ -169,6 +169,42 @@ func (s *Store) listUploadsPostgres(userID string) []Upload {
 	return uploads
 }
 
+func (s *Store) deleteUploadPostgres(userID, uploadID string) error {
+	rows, err := s.db.Query(`select id from jobs where upload_id = $1 and user_id = $2 order by created_at desc`, uploadID, userID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var jobIDs []string
+	for rows.Next() {
+		var jobID string
+		if err := rows.Scan(&jobID); err != nil {
+			return err
+		}
+		jobIDs = append(jobIDs, jobID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(jobIDs) > 0 {
+		return uploadInUseError{jobIDs: jobIDs}
+	}
+
+	result, err := s.db.Exec(`delete from uploads where id = $1 and user_id = $2`, uploadID, userID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return errUploadNotFound
+	}
+	return nil
+}
+
 func (s *Store) insertJobPostgres(job *Job) error {
 	configJSON, err := json.Marshal(job.Config)
 	if err != nil {

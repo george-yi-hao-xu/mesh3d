@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -171,10 +172,34 @@ func (a *App) handleUploadRoutes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if r.Method != http.MethodGet {
+
+	if r.Method != http.MethodGet && r.Method != http.MethodDelete {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+
+	if r.Method == http.MethodDelete {
+		if err := a.store.DeleteUploadForUser(user.ID, parts[0]); err != nil {
+			var inUse uploadInUseError
+			switch err {
+			case errUploadNotFound:
+				writeError(w, http.StatusNotFound, err.Error())
+			default:
+				if errors.As(err, &inUse) {
+					writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+						"error":         inUse.Error(),
+						"relatedJobIds": inUse.jobIDs,
+					})
+				} else {
+					writeError(w, http.StatusInternalServerError, err.Error())
+				}
+			}
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	upload, ok := a.store.GetUploadForUser(user.ID, parts[0])
 	if !ok {
 		writeError(w, http.StatusNotFound, "upload not found")

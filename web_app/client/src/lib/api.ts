@@ -61,6 +61,17 @@ export async function fetchUploadArtifact(uploadId: string): Promise<UploadArtif
   return readJSON(res);
 }
 
+export async function deleteUpload(uploadId: string): Promise<void> {
+  const res = await fetch(`/api/uploads/${uploadId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const error = await readError(res);
+    if (error.status === 405) {
+      throw Object.assign(new Error("Mesh delete is not available from the current backend. Restart the backend server and try again."), { status: 405 });
+    }
+    throw error;
+  }
+}
+
 export async function createJob(uploadId: string, name: string, config: Record<string, number>): Promise<{ job: Job; frames: MeshFrame[] }> {
   const res = await fetch("/api/jobs", {
     method: "POST",
@@ -120,7 +131,22 @@ async function readJSON<T = unknown>(res: Response): Promise<T> {
   if (!res.ok) {
     const error = new Error((data as { error?: string }).error || `Request failed: ${res.status}`) as AppError;
     error.status = res.status;
+    error.relatedJobIds = parseRelatedJobIds(data);
     throw error;
   }
   return data as T;
+}
+
+async function readError(res: Response): Promise<AppError> {
+  const data = await res.json().catch(() => ({}));
+  const error = new Error((data as { error?: string }).error || `Request failed: ${res.status}`) as AppError;
+  error.status = res.status;
+  error.relatedJobIds = parseRelatedJobIds(data);
+  return error;
+}
+
+function parseRelatedJobIds(data: unknown): string[] | undefined {
+  const relatedJobIds = (data as { relatedJobIds?: unknown }).relatedJobIds;
+  if (!Array.isArray(relatedJobIds)) return undefined;
+  return relatedJobIds.filter((id): id is string => typeof id === "string");
 }

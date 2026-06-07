@@ -126,7 +126,7 @@ export type SolverConfig = {
   springConnectProb: number;
 };
 
-export type AppError = Error & { status?: number };
+export type AppError = Error & { status?: number; relatedJobIds?: string[] };
 
 export type PreparedMesh = {
   mesh: MeshData;

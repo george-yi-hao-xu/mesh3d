@@ -1,5 +1,5 @@
 import { makeAutoObservable, runInAction } from "mobx";
-import { fetchUploadArtifact, listUploads, uploadMeshArtifact } from "../lib/api";
+import { deleteUpload, fetchUploadArtifact, listUploads, uploadMeshArtifact } from "../lib/api";
 import { parseMeshData } from "../lib/mesh-parser";
 import { sanitizeDownloadStem } from "../lib/format";
 import type { AppError, MeshData, PreparedMesh, Upload } from "../types";
@@ -15,6 +15,9 @@ export class MeshWarehouseStore {
   loading = false;
   uploading = false;
   savingGenerated = false;
+  deleting = false;
+  deleteOverlayUploadId: string | null = null;
+  deleteError = "";
   error = "";
 
   constructor(root: RootStore) {
@@ -29,6 +32,11 @@ export class MeshWarehouseStore {
   get canSaveGeneratedMesh(): boolean {
     const preview = this.root.preview.preparedMesh;
     return Boolean(preview?.generated && !preview.uploadId && preview.mesh.edges.length > 0);
+  }
+
+  get deleteOverlayUpload(): Upload | null {
+    if (!this.deleteOverlayUploadId) return null;
+    return this.uploads.find((upload) => upload.id === this.deleteOverlayUploadId) || null;
   }
 
   // Refresh the list of uploads from the server, showing loading and error states as needed.
@@ -62,6 +70,59 @@ export class MeshWarehouseStore {
   closePicker(): void {
     this.pickerOpen = false;
     this.error = "";
+    this.closeDeleteOverlay();
+  }
+
+  openDeleteOverlay(upload: Upload): void {
+    this.deleteOverlayUploadId = upload.id;
+    this.deleteError = "";
+  }
+
+  closeDeleteOverlay(): void {
+    this.deleteOverlayUploadId = null;
+    this.deleteError = "";
+  }
+
+  async confirmDelete(): Promise<void> {
+    const uploadId = this.deleteOverlayUploadId;
+    if (!uploadId) return;
+
+    this.deleting = true;
+    this.deleteError = "";
+    try {
+      await deleteUpload(uploadId);
+      runInAction(() => {
+        this.uploads = this.uploads.filter((upload) => upload.id !== uploadId);
+        if (this.selectedUpload?.id === uploadId) {
+          this.selectedUpload = null;
+          this.selectedText = "";
+          this.selectedMesh = null;
+          this.root.preview.reset();
+          this.root.jobs.clearPreparedMeshPreview("No mesh loaded.");
+        }
+        this.closeDeleteOverlay();
+      });
+    } catch (error) {
+      if (this.root.auth.handleAuthError(error as AppError)) {
+        this.closeDeleteOverlay();
+        return;
+      }
+      runInAction(() => {
+        const relatedJobIds = (error as AppError).relatedJobIds || [];
+        this.root.jobs.highlightJobs(relatedJobIds);
+        if (relatedJobIds.length > 0) {
+          // related jobs exist
+          // this.closePicker();
+          this.deleteError = "Cannot delete mesh. Related jobs have been highlighted in the job list. Please delete those jobs first.";
+        } else {
+          this.deleteError = error instanceof Error ? error.message : "Could not delete mesh.";
+        }
+      });
+    } finally {
+      runInAction(() => {
+        this.deleting = false;
+      });
+    }
   }
 
   // Upload a new mesh file to the server, then refresh the list and select the new upload if successful. Shows loading and error states as needed.
@@ -160,6 +221,9 @@ export class MeshWarehouseStore {
     this.loading = false;
     this.uploading = false;
     this.savingGenerated = false;
+    this.deleting = false;
+    this.deleteOverlayUploadId = null;
+    this.deleteError = "";
     this.error = "";
   }
 }

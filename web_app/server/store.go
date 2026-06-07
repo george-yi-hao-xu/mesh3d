@@ -24,7 +24,16 @@ var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 var (
 	errJobNotFound     = errors.New("job not found")
 	errJobNotDeletable = errors.New("job is not finished")
+	errUploadNotFound  = errors.New("upload not found")
 )
+
+type uploadInUseError struct {
+	jobIDs []string
+}
+
+func (e uploadInUseError) Error() string {
+	return "mesh is used by existing jobs; delete those jobs first"
+}
 
 func (s *Store) uploadMeshPath(uploadID string) string {
 	return filepath.Join(s.storageDir, "uploads", uploadID+".mesh")
@@ -140,6 +149,24 @@ func (s *Store) ListUploads(userID string) []Upload {
 // GetUploadForUser returns a stored mesh artifact only when it belongs to the requested user.
 func (s *Store) GetUploadForUser(userID, uploadID string) (Upload, bool) {
 	return s.uploadForUser(uploadID, userID)
+}
+
+// DeleteUploadForUser removes an unused user-owned warehouse mesh artifact.
+func (s *Store) DeleteUploadForUser(userID, uploadID string) error {
+	upload, ok := s.uploadForUser(uploadID, userID)
+
+	if !ok {
+		return errUploadNotFound
+	}
+
+	if err := s.deleteUploadPostgres(userID, uploadID); err != nil {
+		return err
+	}
+
+	if err := os.Remove(upload.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // CreateJob creates a job folder with input copied from a prior upload.

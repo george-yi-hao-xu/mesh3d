@@ -1,4 +1,4 @@
-import { ChangeEvent, useRef } from "react";
+import { ChangeEvent, MouseEvent, useEffect, useRef } from "react";
 import { observer } from "mobx-react-lite";
 import { formatDate } from "../lib/format";
 import { useStores } from "../stores/store-context";
@@ -8,6 +8,19 @@ import "./MeshWarehouseDialog.scss";
 export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
   const { warehouse } = useStores();
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const deleteUpload = warehouse.deleteOverlayUpload;
+  const deleteOverlayOpen = Boolean(deleteUpload);
+
+  useEffect(() => {
+    if (!deleteOverlayOpen) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        warehouse.closeDeleteOverlay();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [warehouse, deleteOverlayOpen]);
 
   if (!warehouse.pickerOpen) return null;
 
@@ -17,13 +30,18 @@ export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
     event.target.value = "";
   }
 
+  function openDelete(event: MouseEvent<HTMLButtonElement>, upload: Upload): void {
+    event.stopPropagation();
+    warehouse.openDeleteOverlay(upload);
+  }
+
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="meshWarehouseTitle" onClick={(event) => {
       if (event.target === event.currentTarget) {
         warehouse.closePicker();
       }
     }}>
-      <div className="overlay-card mesh-warehouse-card">
+      <div className="overlay-card mesh-warehouse-overlay">
         <div className="mesh-warehouse-head">
           <div>
             <h2 id="meshWarehouseTitle">Mesh Warehouse</h2>
@@ -41,15 +59,21 @@ export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
           {warehouse.loading && warehouse.uploads.length === 0 ? <p className="mesh-warehouse-empty">Loading meshes.</p> : null}
           {!warehouse.loading && warehouse.uploads.length === 0 ? <p className="mesh-warehouse-empty">No meshes saved yet.</p> : null}
           {warehouse.uploads.map((upload) => (
-            <button
-              key={upload.id}
-              type="button"
-              className={`mesh-warehouse-item ${upload.id === warehouse.selectedUpload?.id ? "active" : ""}`}
-              onClick={() => void warehouse.selectUpload(upload)}
-            >
-              <span className="mesh-warehouse-title">{upload.fileName}</span>
-              <span className="mesh-warehouse-meta">{uploadMeta(upload)}</span>
-            </button>
+            <div key={upload.id} className="mesh-warehouse-list-item">
+              <div
+                key={upload.id}
+                className={`mesh-warehouse-card-item ${upload.id === warehouse.selectedUpload?.id ? "active" : ""}`}
+                onClick={() => void warehouse.selectUpload(upload)}
+              >
+                <div className="mesh-warehouse-select" role="button">
+                  <span className="mesh-warehouse-title">{upload.fileName}</span>
+                  <span className="mesh-warehouse-meta">{uploadMeta(upload)}</span>
+                </div>
+              </div>
+              <button className="danger mesh-warehouse-delete" type="button" onClick={(event) => openDelete(event, upload)}>
+                x
+              </button>
+            </div>
           ))}
         </div>
 
@@ -59,6 +83,29 @@ export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
           </button>
         </div>
       </div>
+
+      {deleteUpload ? (
+        <div className="overlay mesh-delete-overlay" role="dialog" aria-modal="true" aria-labelledby="deleteMeshTitle" onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            warehouse.closeDeleteOverlay();
+          }
+        }}>
+          <div className="overlay-card">
+            <h2 id="deleteMeshTitle">Delete mesh?</h2>
+            <p>This removes {deleteUpload.fileName} from your warehouse. Jobs that already use this mesh must be deleted first.</p>
+            {warehouse.deleteError ? <p className="overlay-error">{warehouse.deleteError}</p> : null}
+            
+            <div className="overlay-actions">
+              <button className="secondary" type="button" onClick={() => warehouse.closeDeleteOverlay()}>
+                Cancel
+              </button>
+              <button className="danger" type="button" disabled={warehouse.deleting} onClick={() => void warehouse.confirmDelete()}>
+                {warehouse.deleting ? "Deleting" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 });

@@ -25,6 +25,7 @@ export class JobStore {
   deleteError = "";
   playbackTimer: number | null = null;
   playback = false;
+  highlightedJobIds: string[] = [];
 
   constructor(root: RootStore) {
     this.root = root;
@@ -112,6 +113,22 @@ export class JobStore {
 
   get firstLoadedFrameMesh(): MeshData | null {
     return this.activeFrames.find((frame) => frame.loaded && frame.pointCloud?.edges)?.pointCloud || null;
+  }
+
+  get hasJobHighlights(): boolean {
+    return this.highlightedJobIds.length > 0;
+  }
+
+  highlightJobs(jobIds: string[]): void {
+    this.highlightedJobIds = Array.from(new Set(jobIds.filter(Boolean)));
+  }
+
+  clearJobHighlights(): void {
+    this.highlightedJobIds = [];
+  }
+
+  isJobHighlighted(jobId: string): boolean {
+    return this.highlightedJobIds.includes(jobId);
   }
 
   async refreshJobs(): Promise<void> {
