@@ -13,8 +13,13 @@ import (
 func (a *App) handleJobs(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	switch r.Method {
+	// GET all jobs
+	// GET /api/jobs
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, a.store.ListJobs(user.ID))
+	
+	// POST a new job
+	// POST /api/jobs
 	case http.MethodPost:
 		var req struct {
 			UploadID string                 `json:"uploadId"`
@@ -34,16 +39,19 @@ func (a *App) handleJobs(w http.ResponseWriter, r *http.Request) {
 		}
 
 		job, err := a.store.CreateJob(user.ID, req.UploadID, req.Name, req.Config)
+
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
 		job, runErr := RunGoSolver(a.store, job.ID)
+
 		if job == nil {
 			writeError(w, http.StatusInternalServerError, "job disappeared while running")
 			return
 		}
+
 		if runErr != nil {
 			writeJSON(w, http.StatusCreated, JobCreateResponse{Job: job, Frames: nil})
 			return
@@ -74,6 +82,8 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid job id")
 		return
 	}
+
+	// GET&DELETE api jobs/:jobId
 	if len(parts) == 1 {
 		switch r.Method {
 		case http.MethodGet:
@@ -103,12 +113,14 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// api jobs/:jobId/???
 	switch parts[1] {
 	case "review":
 		if len(parts) != 2 {
 			writeError(w, http.StatusNotFound, "review not found")
 			return
 		}
+
 		a.handleJobReview(w, r, user.ID, jobID)
 	case "snapshots":
 		if len(parts) != 3 {
@@ -119,6 +131,7 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid snapshot file")
 			return
 		}
+
 		a.serveJobFile(w, r, user.ID, jobID, filepath.Join("snapshots", parts[2]))
 	case "result":
 		a.serveJobResultFile(w, r, user.ID, jobID)

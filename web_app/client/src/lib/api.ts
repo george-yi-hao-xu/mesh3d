@@ -51,11 +51,13 @@ export async function uploadMeshArtifact(file: File | Blob | undefined, fileName
   return readJSON(res);
 }
 
+// GET all uploads (initial meshes)
 export async function listUploads(): Promise<Upload[]> {
   const res = await fetch("/api/uploads");
   return readJSON(res);
 }
 
+// GET a specific upload artifact
 export async function fetchUploadArtifact(uploadId: string): Promise<UploadArtifact> {
   const res = await fetch(`/api/uploads/${uploadId}`);
   return readJSON(res);
