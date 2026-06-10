@@ -60,9 +60,9 @@ export const ViewerPanel = observer(function ViewerPanel() {
           ) : <div className="spring-legend"></div>}
         </div>
       ) : null}
-      <JobReviewPanel />
       <TimelineControls />
       <MeshCanvas />
+      <JobReviewPanel />
       <details className="raw-mesh">
         <summary>Raw mesh artifact</summary>
         <pre className="mesh-preview">{jobs.rawPreviewText}</pre>

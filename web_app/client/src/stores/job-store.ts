@@ -286,7 +286,7 @@ export class JobStore {
     }
   }
 
-  selectFrameAt(index: number): void {
+  selectFrameAt_safe(index: number): void {
     if (this.activeFrames.length === 0) return;
     const selectedIndex = Math.max(0, Math.min(this.activeFrames.length - 1, index));
     void this.selectFrame(this.activeFrames[selectedIndex].url);
@@ -295,7 +295,7 @@ export class JobStore {
   startPlayback(): void {
     if (this.activeFrames.length < 2) return;
     if (this.selectedFrameIndex >= this.activeFrames.length - 1) {
-      this.selectFrameAt(0);
+      this.selectFrameAt_safe(0);
     }
 
     this.playback = true;
