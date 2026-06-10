@@ -14,7 +14,6 @@ import (
 
 	"mesh3d/web_app/server/solver"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -490,13 +489,47 @@ func scanJobRows(row rowScanner) (*Job, error) {
 
 func scanJobReview(row rowScanner) (*JobReview, error) {
 	var review JobReview
-	var tags pgtype.FlatArray[string]
+	var tags string
 	err := row.Scan(&review.JobID, &review.UserID, &review.Score, &tags, &review.Note, &review.CreatedAt, &review.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
-	review.Tags = append([]string(nil), tags...)
+	review.Tags = parsePostgresTextArray(tags)
 	return &review, nil
+}
+
+func parsePostgresTextArray(value string) []string {
+	value = strings.TrimSpace(value)
+	if len(value) < 2 || value[0] != '{' || value[len(value)-1] != '}' {
+		return nil
+	}
+	value = value[1 : len(value)-1]
+	if value == "" {
+		return []string{}
+	}
+
+	tags := make([]string, 0)
+	var item strings.Builder
+	inQuotes := false
+	escaped := false
+	for _, r := range value {
+		switch {
+		case escaped:
+			item.WriteRune(r)
+			escaped = false
+		case r == '\\' && inQuotes:
+			escaped = true
+		case r == '"':
+			inQuotes = !inQuotes
+		case r == ',' && !inQuotes:
+			tags = append(tags, item.String())
+			item.Reset()
+		default:
+			item.WriteRune(r)
+		}
+	}
+	tags = append(tags, item.String())
+	return tags
 }
 
 func nullableString(value string) interface{} {

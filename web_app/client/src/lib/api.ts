@@ -72,6 +72,7 @@ export async function deleteUpload(uploadId: string): Promise<void> {
   }
 }
 
+// run solver
 export async function createJob(uploadId: string, name: string, config: Record<string, number>): Promise<{ job: Job; frames: MeshFrame[] }> {
   const res = await fetch("/api/jobs", {
     method: "POST",
@@ -106,6 +107,7 @@ export async function saveJobReview(jobId: string, review: { score: number; tags
   const res = await fetch(`/api/jobs/${jobId}/review`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
+    // credentials: "same-origin",
     body: JSON.stringify(review),
   });
   return readJSON(res);

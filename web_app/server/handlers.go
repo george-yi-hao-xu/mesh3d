@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"log"
 )
 
 // handleHealth reports whether the server process is reachable.
@@ -286,7 +288,8 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 		case http.MethodGet:
 			job, ok := a.store.GetJobForUser(user.ID, jobID)
 			if !ok {
-				writeError(w, http.StatusNotFound, "job not found")
+				log.Printf("job not found for user %s and job id %s", user.ID, jobID)
+				writeError(w, http.StatusNotFound, "job not found when try to get this job")
 				return
 			}
 			writeJSON(w, http.StatusOK, job)
@@ -368,7 +371,7 @@ func (a *App) serveJobResultFile(w http.ResponseWriter, r *http.Request, userID,
 		return
 	}
 	if _, ok := a.store.GetJobForUser(userID, jobID); !ok {
-		writeError(w, http.StatusNotFound, "job not found")
+		writeError(w, http.StatusNotFound, "job not found when try to get result file for this job")
 		return
 	}
 	if _, err := os.Stat(a.store.jobResultPath(jobID)); err == nil {
@@ -385,7 +388,7 @@ func (a *App) serveJobFile(w http.ResponseWriter, r *http.Request, userID, jobID
 		return
 	}
 	if _, ok := a.store.GetJobForUser(userID, jobID); !ok {
-		writeError(w, http.StatusNotFound, "job not found")
+		writeError(w, http.StatusNotFound, "job not found when try to serve this job file")
 		return
 	}
 
