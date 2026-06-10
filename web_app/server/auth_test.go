@@ -152,6 +152,54 @@ func TestCreateJobRejectsUploadWithoutSprings(t *testing.T) {
 	}
 }
 
+func TestJobReviewIsOwnedAndValidated(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	bob, err := app.store.CreateUser("bob", "password123")
+	if err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	upload := saveTestUpload(t, app.store, alice.ID)
+	job, err := app.store.CreateJob(alice.ID, upload.ID, "alice job", map[string]interface{}{"maxSimTime": 1})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	invalid := request(handler, http.MethodPut, "/api/jobs/"+job.ID+"/review", strings.NewReader(`{"score":6}`), authCookie(t, app, alice))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid review status = %d, want %d; body: %s", invalid.Code, http.StatusBadRequest, invalid.Body.String())
+	}
+
+	bobReview := request(handler, http.MethodPut, "/api/jobs/"+job.ID+"/review", strings.NewReader(`{"score":4}`), authCookie(t, app, bob))
+	if bobReview.Code != http.StatusNotFound {
+		t.Fatalf("bob review status = %d, want %d; body: %s", bobReview.Code, http.StatusNotFound, bobReview.Body.String())
+	}
+
+	aliceReview := request(handler, http.MethodPut, "/api/jobs/"+job.ID+"/review", strings.NewReader(`{"score":5,"tags":["Stable","good result","stable"],"note":"works well"}`), authCookie(t, app, alice))
+	if aliceReview.Code != http.StatusOK {
+		t.Fatalf("alice review status = %d, want %d; body: %s", aliceReview.Code, http.StatusOK, aliceReview.Body.String())
+	}
+
+	fetched := request(handler, http.MethodGet, "/api/jobs/"+job.ID, nil, authCookie(t, app, alice))
+	if fetched.Code != http.StatusOK {
+		t.Fatalf("fetch reviewed job status = %d, want %d; body: %s", fetched.Code, http.StatusOK, fetched.Body.String())
+	}
+	var reviewed Job
+	if err := json.Unmarshal(fetched.Body.Bytes(), &reviewed); err != nil {
+		t.Fatalf("decode reviewed job: %v", err)
+	}
+	if reviewed.Review == nil || reviewed.Review.Score != 5 || reviewed.Review.Note != "works well" {
+		t.Fatalf("reviewed job review = %+v, want saved review", reviewed.Review)
+	}
+	if len(reviewed.Review.Tags) != 2 || reviewed.Review.Tags[0] != "stable" || reviewed.Review.Tags[1] != "good-result" {
+		t.Fatalf("review tags = %+v, want normalized unique tags", reviewed.Review.Tags)
+	}
+}
+
 func TestUploadsAreUserScopedAndFetchable(t *testing.T) {
 	app, handler := newTestApp(t)
 	alice, err := app.store.CreateUser("alice", "password123")

@@ -273,6 +273,12 @@ solver creates checkpoints
 
 The browser turns uploaded point clouds into explicit `mesh-v1` vertices and springs before submitting a solve. The Go solver loads that explicit topology, then runs the mass-spring update loop until convergence or a configured limit.
 
+Future mesh-quality judging notes live in:
+
+```text
+docs/mesh-quality-judgment.md
+```
+
 Solver orchestration code lives in:
 
 ```text

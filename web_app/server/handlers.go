@@ -310,6 +310,12 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch parts[1] {
+	case "review":
+		if len(parts) != 2 {
+			writeError(w, http.StatusNotFound, "review not found")
+			return
+		}
+		a.handleJobReview(w, r, user.ID, jobID)
 	case "snapshots":
 		if len(parts) != 3 {
 			writeError(w, http.StatusNotFound, "snapshot not found")
@@ -325,6 +331,35 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusNotFound, "not found")
 	}
+}
+
+func (a *App) handleJobReview(w http.ResponseWriter, r *http.Request, userID, jobID string) {
+	if r.Method != http.MethodPut {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req struct {
+		Score int      `json:"score"`
+		Tags  []string `json:"tags"`
+		Note  string   `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	review, err := a.store.SaveJobReviewForUser(userID, jobID, req.Score, req.Tags, req.Note)
+	if err != nil {
+		switch err {
+		case errJobNotFound:
+			writeError(w, http.StatusNotFound, err.Error())
+		case errInvalidReview:
+			writeError(w, http.StatusBadRequest, err.Error())
+		default:
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, review)
 }
 
 func (a *App) serveJobResultFile(w http.ResponseWriter, r *http.Request, userID, jobID string) {

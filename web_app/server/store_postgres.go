@@ -14,6 +14,7 @@ import (
 
 	"mesh3d/web_app/server/solver"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -246,6 +247,9 @@ func (s *Store) listJobsPostgres(userID string) []*Job {
 		if err := s.loadSnapshots(job); err != nil {
 			log.Printf("load snapshots for %s: %v", job.ID, err)
 		}
+		if err := s.loadReview(job); err != nil {
+			log.Printf("load review for %s: %v", job.ID, err)
+		}
 		jobs = append(jobs, job)
 	}
 	return jobs
@@ -278,6 +282,9 @@ func (s *Store) queryJob(where string, args ...interface{}) (*Job, error) {
 		return nil, err
 	}
 	if err := s.loadSnapshots(job); err != nil {
+		return nil, err
+	}
+	if err := s.loadReview(job); err != nil {
 		return nil, err
 	}
 	return job, nil
@@ -384,6 +391,41 @@ func (s *Store) loadSnapshots(job *Job) error {
 	return rows.Err()
 }
 
+func (s *Store) upsertJobReviewPostgres(review *JobReview) error {
+	var createdAt time.Time
+	err := s.db.QueryRow(
+		`insert into job_reviews (job_id, user_id, score, tags, note, created_at, updated_at)
+		 values ($1, $2, $3, $4, $5, $6, $7)
+		 on conflict (job_id) do update
+		 set score = excluded.score,
+		     tags = excluded.tags,
+		     note = excluded.note,
+		     updated_at = excluded.updated_at
+		 returning created_at`,
+		review.JobID, review.UserID, review.Score, review.Tags, review.Note, review.CreatedAt, review.UpdatedAt,
+	).Scan(&createdAt)
+	if err == nil {
+		review.CreatedAt = createdAt
+	}
+	return err
+}
+
+func (s *Store) loadReview(job *Job) error {
+	review, err := scanJobReview(s.db.QueryRow(
+		`select job_id, user_id, score, tags, note, created_at, updated_at
+		 from job_reviews
+		 where job_id = $1`, job.ID))
+	if errors.Is(err, sql.ErrNoRows) {
+		job.Review = nil
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	job.Review = review
+	return nil
+}
+
 func (s *Store) artifactPath(objectKey string) string {
 	return filepath.Join(s.storageDir, filepath.FromSlash(objectKey))
 }
@@ -444,6 +486,17 @@ func scanJobRows(row rowScanner) (*Job, error) {
 		job.FinishedAt = &finishedAt.Time
 	}
 	return &job, nil
+}
+
+func scanJobReview(row rowScanner) (*JobReview, error) {
+	var review JobReview
+	var tags pgtype.FlatArray[string]
+	err := row.Scan(&review.JobID, &review.UserID, &review.Score, &tags, &review.Note, &review.CreatedAt, &review.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	review.Tags = append([]string(nil), tags...)
+	return &review, nil
 }
 
 func nullableString(value string) interface{} {

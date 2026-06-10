@@ -1,0 +1,75 @@
+.job-review {
+  border-top: 1px solid #d9e0e7;
+  border-bottom: 1px solid #d9e0e7;
+  padding: 12px 0;
+  margin: 2px 0 10px;
+}
+
+.job-review-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 10px;
+
+  h3 {
+    margin: 0;
+    font-size: 14px;
+    color: #18202a;
+  }
+
+  p {
+    font-size: 12px;
+  }
+}
+
+.job-review-form {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.score-row,
+.tag-row,
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-button,
+.tag-button {
+  border: 1px solid #c8d2dc;
+  background: #ffffff;
+  color: #344252;
+}
+
+.score-button {
+  width: 36px;
+  height: 34px;
+  padding: 0;
+}
+
+.tag-button {
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.score-button.selected,
+.tag-button.selected {
+  border-color: var(--accent-color);
+  background: #eef0ff;
+  color: var(--accent-color);
+}
+
+.job-review textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.review-message {
+  color: #5c6b7a;
+  font-size: 12px;
+  font-weight: 700;
+}

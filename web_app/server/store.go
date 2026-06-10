@@ -25,6 +25,7 @@ var (
 	errJobNotFound     = errors.New("job not found")
 	errJobNotDeletable = errors.New("job is not finished")
 	errUploadNotFound  = errors.New("upload not found")
+	errInvalidReview   = errors.New("review score must be between 1 and 5")
 )
 
 type uploadInUseError struct {
@@ -349,6 +350,50 @@ func (s *Store) SetResult(jobID string, result solver.SolverResult) {
 	s.setResultPostgres(jobID, result)
 }
 
+// SaveJobReviewForUser stores a user's label for one of their jobs.
+func (s *Store) SaveJobReviewForUser(userID, jobID string, score int, tags []string, note string) (*JobReview, error) {
+	if score < 1 || score > 5 {
+		return nil, errInvalidReview
+	}
+	if _, ok := s.GetJobForUser(userID, jobID); !ok {
+		return nil, errJobNotFound
+	}
+	review := JobReview{
+		JobID:     jobID,
+		UserID:    userID,
+		Score:     score,
+		Tags:      normalizeReviewTags(tags),
+		Note:      strings.TrimSpace(note),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := s.upsertJobReviewPostgres(&review); err != nil {
+		return nil, err
+	}
+	return &review, nil
+}
+
+func normalizeReviewTags(tags []string) []string {
+	seen := make(map[string]bool, len(tags))
+	normalized := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		tag = strings.ToLower(strings.TrimSpace(tag))
+		tag = strings.Join(strings.Fields(tag), "-")
+		if tag == "" || seen[tag] {
+			continue
+		}
+		if len(tag) > 32 {
+			tag = tag[:32]
+		}
+		seen[tag] = true
+		normalized = append(normalized, tag)
+		if len(normalized) >= 12 {
+			break
+		}
+	}
+	return normalized
+}
+
 func normalizeUsername(username string) (string, string, error) {
 	username = strings.TrimSpace(username)
 	if len(username) < 3 || len(username) > 32 {
@@ -387,6 +432,11 @@ func cloneJob(job *Job) *Job {
 	}
 	cp := *job
 	cp.Snapshots = append([]Snapshot(nil), job.Snapshots...)
+	if job.Review != nil {
+		review := *job.Review
+		review.Tags = append([]string(nil), job.Review.Tags...)
+		cp.Review = &review
+	}
 	if job.Config != nil {
 		cp.Config = make(map[string]interface{}, len(job.Config))
 		for k, v := range job.Config {

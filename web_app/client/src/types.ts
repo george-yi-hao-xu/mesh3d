@@ -27,6 +27,15 @@ export type Snapshot = {
   createdAt?: string;
 };
 
+export type JobReview = {
+  jobId: string;
+  score: number;
+  tags: string[];
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Job = {
   id: string;
   userId?: string;
@@ -45,6 +54,7 @@ export type Job = {
   createdAt: string;
   updatedAt?: string;
   finishedAt?: string;
+  review?: JobReview;
 };
 
 export type JobFrameResponse = {

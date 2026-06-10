@@ -1,5 +1,6 @@
 import { observer } from "mobx-react-lite";
 import { MeshCanvas } from "./MeshCanvas";
+import { JobReviewPanel } from "./JobReviewPanel";
 import { TimelineControls } from "./TimelineControls";
 import { useStores } from "../stores/store-context";
 import "./ViewerPanel.scss";
@@ -59,6 +60,7 @@ export const ViewerPanel = observer(function ViewerPanel() {
           ) : <div className="spring-legend"></div>}
         </div>
       ) : null}
+      <JobReviewPanel />
       <TimelineControls />
       <MeshCanvas />
       <details className="raw-mesh">

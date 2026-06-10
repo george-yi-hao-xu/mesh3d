@@ -47,8 +47,19 @@ create table if not exists job_snapshots (
   created_at timestamptz not null
 );
 
+create table if not exists job_reviews (
+  job_id text primary key references jobs(id) on delete cascade,
+  user_id text not null references users(id) on delete cascade,
+  score integer not null check (score between 1 and 5),
+  tags text[] not null default '{}',
+  note text not null default '',
+  created_at timestamptz not null,
+  updated_at timestamptz not null
+);
+
 create unique index if not exists users_username_lower_idx on users (lower(username));
 create index if not exists uploads_user_id_created_at_idx on uploads (user_id, created_at desc);
 create index if not exists jobs_user_id_created_at_idx on jobs (user_id, created_at desc);
 create index if not exists jobs_upload_id_idx on jobs (upload_id);
 create index if not exists job_snapshots_job_id_step_idx on job_snapshots (job_id, step);
+create index if not exists job_reviews_user_id_updated_at_idx on job_reviews (user_id, updated_at desc);

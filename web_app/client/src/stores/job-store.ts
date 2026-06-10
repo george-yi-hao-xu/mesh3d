@@ -1,5 +1,5 @@
 import { makeAutoObservable, runInAction } from "mobx";
-import { createJob, deleteJob, fetchJob, fetchMeshData, listJobs } from "../lib/api";
+import { createJob, deleteJob, fetchJob, fetchMeshData, listJobs, saveJobReview } from "../lib/api";
 import { formatSeconds, jobTitle, sanitizeDownloadStem } from "../lib/format";
 import type { AppError, Job, MeshData, MeshFrame, PreparedMesh } from "../types";
 import type { RootStore } from "./root-store";
@@ -21,6 +21,7 @@ export class JobStore {
   rawPreviewText = "No mesh loaded.";
   submitting = false;
   deleting = false;
+  savingReview = false;
   deleteOverlayJobId: string | null = null;
   deleteError = "";
   playbackTimer: number | null = null;
@@ -372,6 +373,22 @@ export class JobStore {
     }
   }
 
+  async saveReview(score: number, tags: string[], note: string): Promise<void> {
+    const job = this.activeJob;
+    if (!job) return;
+    this.savingReview = true;
+    const review = await saveJobReview(job.id, { score, tags, note });
+    runInAction(() => {
+      const current = this.jobCache.get(job.id) || job;
+      current.review = review;
+      this.cacheJob(current);
+      this.upsertJob(current);
+    });
+    runInAction(() => {
+      this.savingReview = false;
+    })
+  }
+
   reset(): void {
     this.stopPlayback();
     this.jobs = [];
@@ -381,6 +398,7 @@ export class JobStore {
     this.deleteError = "";
     this.submitting = false;
     this.deleting = false;
+    this.savingReview = false;
   }
 
   clearActiveJobView(): void {

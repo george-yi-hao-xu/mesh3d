@@ -1,5 +1,5 @@
 import { parseMeshData } from "./mesh-parser";
-import type { AppError, Job, JobFrameResponse, MeshFrame, Upload, UploadArtifact, User } from "../types";
+import type { AppError, Job, JobFrameResponse, JobReview, MeshFrame, Upload, UploadArtifact, User } from "../types";
 
 export async function getMe(): Promise<{ user: User }> {
   const res = await fetch("/api/auth/me");
@@ -100,6 +100,15 @@ export async function deleteJob(jobId: string): Promise<void> {
   if (!res.ok) {
     await readJSON(res);
   }
+}
+
+export async function saveJobReview(jobId: string, review: { score: number; tags: string[]; note: string }): Promise<JobReview> {
+  const res = await fetch(`/api/jobs/${jobId}/review`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(review),
+  });
+  return readJSON(res);
 }
 
 export async function fetchMeshData(url: string): Promise<{ text: string; pointCloud: ReturnType<typeof parseMeshData> }> {

@@ -33,6 +33,16 @@ type Snapshot struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type JobReview struct {
+	JobID     string    `json:"jobId"`
+	UserID    string    `json:"userId,omitempty"`
+	Score     int       `json:"score"`
+	Tags      []string  `json:"tags"`
+	Note      string    `json:"note,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type Job struct {
 	ID         string                 `json:"id"`
 	UserID     string                 `json:"userId"`
@@ -51,6 +61,7 @@ type Job struct {
 	CreatedAt  time.Time              `json:"createdAt"`
 	UpdatedAt  time.Time              `json:"updatedAt"`
 	FinishedAt *time.Time             `json:"finishedAt,omitempty"`
+	Review     *JobReview             `json:"review,omitempty"`
 }
 
 type JobFrame struct {
