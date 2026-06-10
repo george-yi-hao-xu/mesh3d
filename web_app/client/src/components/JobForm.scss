@@ -1,0 +1,31 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.spring-status {
+  min-height: 18px;
+  color: #344252;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mesh-picker-button {
+  width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.run-solve-btn {
+  &:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+}
+
+.disclaimer {
+  margin-top: 8px;
+  font-size: 12px;
+  color: red;
+}

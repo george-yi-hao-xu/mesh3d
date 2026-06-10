@@ -1,84 +1,20 @@
-# Editors and local workspace state
-.vs/
-.vscode/
-!.vscode/
+### VS Code
+# VSCode settings (keep shared configuration)
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-!.vscode/c_cpp_properties.json
-*.code-workspace
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-*.rsuser
+
+# Local History for Visual Studio Code
 .history/
-.localhistory/
 
-# OS files
-.DS_Store
-Thumbs.db
-Desktop.ini
+# Built Visual Studio Code Extensions
+*.vsix
 
-# CMake and build output
-/build/
-/cmake-build-*/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-CTestTestfile.cmake
-CPackConfig.cmake
-CPackSourceConfig.cmake
-Makefile
-/*.sln
-*.vcxproj*
-*.slnx
+# Mesh3D web app runtime storage
+web_app/server/storage/
+web_app/client/node_modules/
+web_app/client/dist/
 
-# Compiled objects, libraries, and executables
-*.o
-*.obj
-*.iobj
-*.a
-*.lib
-*.so
-*.dll
-*.dylib
-*.exe
-*.pdb
-*.ipdb
-*.ilk
-*.exp
-*.pch
-
-# Logs, caches, and temporary files
-*.log
-*.tlog
-*.tmp
-*.cache
-*.binlog
-*.rsp
-*.pidb
-*.svclog
-*.scc
-ipch/
-__pycache__/
-
-# Build/package directories from common generators
-[Dd]ebug/
-[Rr]elease/
-[Rr]eleases/
-x64/
-x86/
-[Ww][Ii][Nn]32/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-[Bb]in/
-[Oo]bj/
-[Ll]og/
-[Ll]ogs/
-
-# Project-local generated dependencies/tools
-build_files/
-raylib-master/
+build/

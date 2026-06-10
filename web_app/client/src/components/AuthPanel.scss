@@ -1,0 +1,19 @@
+.auth-panel {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.auth-card {
+  width: min(100%, 380px);
+  background: #ffffff;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.auth-error {
+  color: #b42318;
+  font-size: 13px;
+}

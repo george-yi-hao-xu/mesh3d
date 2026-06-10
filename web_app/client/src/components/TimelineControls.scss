@@ -1,0 +1,84 @@
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.frame-control {
+  display: grid;
+  gap: 8px;
+}
+
+.frame-head,
+.frame-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.frame-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.transport-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.transport-button {
+  width: 54px;
+  min-height: 28px;
+  padding: 5px 0;
+  border: 1px solid #c8d2dc;
+  background: #ffffff;
+  color: var(--accent-color);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.frame-title {
+  color: #344252;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.frame-label,
+.frame-scale {
+  color: #607080;
+  font-size: 12px;
+}
+
+.frame-label {
+  font-weight: 700;
+}
+
+.frame-slider {
+  width: 100%;
+  padding: 0;
+  cursor: pointer;
+  accent-color: var(--accent-color);
+}
+
+.tab {
+  border: 1px solid #c8d2dc;
+  background: #ffffff;
+  color: var(--accent-color);
+  padding: 8px 10px;
+
+  &.active {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: #ffffff;
+  }
+}
