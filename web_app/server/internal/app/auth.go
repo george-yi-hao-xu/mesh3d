@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"crypto/hmac"
@@ -43,7 +43,7 @@ const userContextKey contextKey = "user"
 
 var errInvalidToken = errors.New("invalid token")
 
-func initJWTSecret() []byte {
+func InitJWTSecret() []byte {
 	secret := strings.TrimSpace(os.Getenv("MESH3D_JWT_SECRET"))
 	if secret != "" {
 		return []byte(secret)

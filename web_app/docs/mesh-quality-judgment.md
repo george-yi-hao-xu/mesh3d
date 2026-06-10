@@ -17,8 +17,8 @@ Relevant code areas:
 - Client mesh preparation: `web_app/client/src/stores/mesh-preview-store.ts`
 - Client spring generation and mesh serialization: `web_app/client/src/lib/mesh-topology.ts`
 - Client job/frame state: `web_app/client/src/stores/job-store.ts`
-- Server job creation and storage: `web_app/server/store.go`
-- Server solver orchestration: `web_app/server/job_runner.go`
+- Server job creation and storage: `web_app/server/internal/app/store.go`
+- Server solver orchestration: `web_app/server/internal/app/job_runner.go`
 - Go solver and mesh physics: `web_app/server/solver/`
 
 ## Product Direction

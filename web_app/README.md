@@ -45,7 +45,7 @@ go mod tidy
 go run .
 ```
 
-On startup, the server applies `server/schema/postgres.sql`. `MESH3D_DATABASE_URL` is required. Browser-generated `.mesh` uploads and generated `.mesh` solver artifacts remain on the local filesystem.
+On startup, the server applies `server/internal/app/schema/postgres.sql`. `MESH3D_DATABASE_URL` is required. Browser-generated `.mesh` uploads and generated `.mesh` solver artifacts remain on the local filesystem.
 
 To inspect Postgres from the terminal, open `psql` inside the running container:
 
@@ -121,7 +121,7 @@ mux.HandleFunc("/", app.handleStatic)
 GET /
 ```
 
-The server calls `handleStatic` in `server/handlers.go`.
+The server calls `handleStatic` in `server/internal/app/static_handlers.go`.
 
 That serves files from `web_app/client`, including:
 
@@ -195,7 +195,7 @@ returns job JSON plus frame mesh text
 
 ### 4. Solver Runs
 
-The job handler calls `RunGoSolver` in `server/job_runner.go`.
+The job handler calls `RunGoSolver` in `server/internal/app/job_runner.go`.
 
 It:
 
@@ -294,7 +294,7 @@ server/solver/mesh/
 The server-side job runner that connects solver output to stored snapshots and bundled frame responses lives in:
 
 ```text
-server/job_runner.go
+server/internal/app/job_runner.go
 ```
 
 Default convergence rule:

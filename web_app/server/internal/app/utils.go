@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"crypto/rand"
@@ -76,7 +76,7 @@ func safePathPart(part string) bool {
 }
 
 // envOr reads an environment variable or returns a fallback.
-func envOr(key, fallback string) string {
+func EnvOr(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
 	}
@@ -85,7 +85,7 @@ func envOr(key, fallback string) string {
 
 // loadDotEnv reads KEY=value pairs from a local .env file without overriding
 // variables already provided by the shell.
-func loadDotEnv(path string) error {
+func LoadDotEnv(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -130,7 +130,7 @@ func loadDotEnv(path string) error {
 }
 
 // logRequests wraps an HTTP handler with simple method/path/duration logging.
-func logRequests(next http.Handler) http.Handler {
+func LogRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
