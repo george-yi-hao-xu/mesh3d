@@ -73,6 +73,45 @@ type JobFrame struct {
 	Step    int     `json:"step,omitempty"`
 }
 
+type TrainingCluster struct {
+	ID              string                 `json:"id"`
+	UserID          string                 `json:"userId,omitempty"`
+	Name            string                 `json:"name"`
+	Status          string                 `json:"status"`
+	Jobs            []TrainingClusterJob   `json:"jobs"`
+	LatestRun       *TrainingRun           `json:"latestRun,omitempty"`
+	Recommendations []ConfigRecommendation `json:"recommendations,omitempty"`
+	CreatedAt       time.Time              `json:"createdAt"`
+	UpdatedAt       time.Time              `json:"updatedAt"`
+}
+
+type TrainingClusterJob struct {
+	ClusterID string    `json:"clusterId,omitempty"`
+	Job       *Job      `json:"job"`
+	AddedAt   time.Time `json:"addedAt"`
+}
+
+type TrainingRun struct {
+	ID            string                 `json:"id"`
+	ClusterID     string                 `json:"clusterId"`
+	Status        string                 `json:"status"`
+	Metrics       map[string]interface{} `json:"metrics"`
+	ModelArtifact string                 `json:"modelArtifact,omitempty"`
+	Error         string                 `json:"error,omitempty"`
+	CreatedAt     time.Time              `json:"createdAt"`
+	UpdatedAt     time.Time              `json:"updatedAt"`
+	FinishedAt    *time.Time             `json:"finishedAt,omitempty"`
+}
+
+type ConfigRecommendation struct {
+	RunID          string                 `json:"runId,omitempty"`
+	Rank           int                    `json:"rank"`
+	Config         map[string]interface{} `json:"config"`
+	PredictedScore float64                `json:"predictedScore"`
+	PredictedTags  []string               `json:"predictedTags"`
+	CreatedAt      time.Time              `json:"createdAt"`
+}
+
 type JobCreateResponse struct {
 	Job    *Job       `json:"job"`
 	Frames []JobFrame `json:"frames"`

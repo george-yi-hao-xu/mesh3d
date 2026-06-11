@@ -11,7 +11,7 @@ import (
 
 // main configures storage, registers routes, and starts the HTTP server.
 func main() {
-	if err := app.LoadDotEnv(".env"); err != nil {
+	if err := app.LoadEnvFiles(".env"); err != nil {
 		log.Printf("warning: %v", err)
 	}
 

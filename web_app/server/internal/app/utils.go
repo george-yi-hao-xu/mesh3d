@@ -86,6 +86,16 @@ func EnvOr(key, fallback string) string {
 // loadDotEnv reads KEY=value pairs from a local .env file without overriding
 // variables already provided by the shell.
 func LoadDotEnv(path string) error {
+	return loadDotEnv(path, false)
+}
+
+// LoadDotEnvOverride reads KEY=value pairs and overwrites values previously
+// loaded from another env file.
+func LoadDotEnvOverride(path string) error {
+	return loadDotEnv(path, true)
+}
+
+func loadDotEnv(path string, override bool) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -119,13 +129,33 @@ func LoadDotEnv(path string) error {
 				value = value[1 : len(value)-1]
 			}
 		}
-		if os.Getenv(key) == "" {
+		if override || os.Getenv(key) == "" {
 			if err := os.Setenv(key, value); err != nil {
 				return fmt.Errorf("set %s from %s:%d: %w", key, path, lineNumber+1, err)
 			}
 		}
 	}
 
+	return nil
+}
+
+// LoadEnvFiles loads base .env values, then overlays .env.<MESH3D_ENV>.
+// Variables already provided by the shell win over both files.
+func LoadEnvFiles(basePath string) error {
+	initial := os.Environ()
+	if err := LoadDotEnv(basePath); err != nil {
+		return err
+	}
+	env := EnvOr("MESH3D_ENV", "development")
+	if err := LoadDotEnvOverride(basePath + "." + env); err != nil {
+		return err
+	}
+	for _, pair := range initial {
+		key, value, ok := strings.Cut(pair, "=")
+		if ok {
+			_ = os.Setenv(key, value)
+		}
+	}
 	return nil
 }
 

@@ -1,3 +1,19 @@
+.workspace-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px 0;
+  flex: none;
+}
+
+.workspace-tabs button {
+  min-width: 96px;
+}
+
+.workspace-tabs button.active {
+  background: var(--accent-color);
+  color: #ffffff;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(320px, 420px) 1fr;

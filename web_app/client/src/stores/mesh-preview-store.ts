@@ -80,6 +80,11 @@ export class MeshPreviewStore {
     }
   }
 
+  setConfig(config: SolverConfig): void {
+    this.config = { ...config };
+    void this.previewInput();
+  }
+
   setIncludeGeneratedSprings(value: boolean): void {
     this.includeGeneratedSprings = value;
     void this.previewInput();

@@ -45,6 +45,10 @@ go mod tidy
 go run .
 ```
 
+The server loads `server/.env` first, then overlays `server/.env.development` by default. Set `MESH3D_ENV=production` to load `server/.env.production` instead.
+
+The ML sidecar follows the same convention from `web_app/ml_service`: it loads `.env` first, then `.env.development` by default. Keep `MESH3D_ML_API_KEY` aligned between the Go server and Python sidecar.
+
 On startup, the server applies `server/internal/app/schema/postgres.sql`. `MESH3D_DATABASE_URL` is required. Browser-generated `.mesh` uploads and generated `.mesh` solver artifacts remain on the local filesystem.
 
 To inspect Postgres from the terminal, open `psql` inside the running container:

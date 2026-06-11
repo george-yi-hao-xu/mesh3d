@@ -1,5 +1,6 @@
 import { AuthStore } from "./auth-store";
 import { JobStore } from "./job-store";
+import { LearningStore } from "./learning-store";
 import { MeshWarehouseStore } from "./mesh-warehouse-store";
 import { MeshPreviewStore } from "./mesh-preview-store";
 import { ViewerStore } from "./viewer-store";
@@ -10,6 +11,7 @@ export class RootStore {
   readonly viewer: ViewerStore;
   readonly jobs: JobStore;
   readonly warehouse: MeshWarehouseStore;
+  readonly learning: LearningStore;
 
   constructor() {
     this.viewer = new ViewerStore();
@@ -17,5 +19,6 @@ export class RootStore {
     this.auth = new AuthStore(this);
     this.jobs = new JobStore(this);
     this.warehouse = new MeshWarehouseStore(this);
+    this.learning = new LearningStore(this);
   }
 }

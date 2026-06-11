@@ -42,7 +42,7 @@ Compute a `MeshQualityReport` from the prepared input mesh and the submitted sol
 Suggested report fields:
 
 ```text
-score: 0-100
+score: 0-5
 grade: good | caution | poor
 metrics:
   points

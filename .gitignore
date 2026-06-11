@@ -18,3 +18,10 @@ web_app/client/node_modules/
 web_app/client/dist/
 
 build/
+
+codex-agent-plan
+
+.env
+
+.venv/
+__pycache__/

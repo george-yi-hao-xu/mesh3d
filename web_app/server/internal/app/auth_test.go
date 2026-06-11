@@ -200,6 +200,109 @@ func TestJobReviewIsOwnedAndValidated(t *testing.T) {
 	}
 }
 
+func TestTrainingClustersAreOwnedAndRequireReviewedJobs(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	bob, err := app.store.CreateUser("bob", "password123")
+	if err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	createRes := postJSON(handler, "/api/training/clusters", `{"name":"cloth tuning"}`, authCookie(t, app, alice))
+	if createRes.Code != http.StatusCreated {
+		t.Fatalf("create cluster status = %d, want %d; body: %s", createRes.Code, http.StatusCreated, createRes.Body.String())
+	}
+	var cluster TrainingCluster
+	if err := json.Unmarshal(createRes.Body.Bytes(), &cluster); err != nil {
+		t.Fatalf("decode cluster: %v", err)
+	}
+
+	bobRead := request(handler, http.MethodGet, "/api/training/clusters/"+cluster.ID, nil, authCookie(t, app, bob))
+	if bobRead.Code != http.StatusNotFound {
+		t.Fatalf("bob read cluster status = %d, want %d", bobRead.Code, http.StatusNotFound)
+	}
+
+	upload := saveTestUpload(t, app.store, alice.ID)
+	unreviewedJob, err := app.store.CreateJob(alice.ID, upload.ID, "unreviewed", map[string]interface{}{"maxSimTime": 1})
+	if err != nil {
+		t.Fatalf("create unreviewed job: %v", err)
+	}
+	addUnreviewed := postJSON(handler, "/api/training/clusters/"+cluster.ID+"/jobs", `{"jobId":"`+unreviewedJob.ID+`"}`, authCookie(t, app, alice))
+	if addUnreviewed.Code != http.StatusNotFound {
+		t.Fatalf("add unreviewed job status = %d, want %d; body: %s", addUnreviewed.Code, http.StatusNotFound, addUnreviewed.Body.String())
+	}
+
+	reviewedJob := createReviewedTestJob(t, app.store, alice.ID, 5)
+	addReviewed := postJSON(handler, "/api/training/clusters/"+cluster.ID+"/jobs", `{"jobId":"`+reviewedJob.ID+`"}`, authCookie(t, app, alice))
+	if addReviewed.Code != http.StatusOK {
+		t.Fatalf("add reviewed job status = %d, want %d; body: %s", addReviewed.Code, http.StatusOK, addReviewed.Body.String())
+	}
+	if err := json.Unmarshal(addReviewed.Body.Bytes(), &cluster); err != nil {
+		t.Fatalf("decode updated cluster: %v", err)
+	}
+	if len(cluster.Jobs) != 1 || cluster.Jobs[0].Job.ID != reviewedJob.ID {
+		t.Fatalf("cluster jobs = %+v, want reviewed job %s", cluster.Jobs, reviewedJob.ID)
+	}
+}
+
+func TestTrainingRejectsSmallClusterBeforeCallingML(t *testing.T) {
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	cluster, err := app.store.CreateTrainingCluster(alice.ID, "small")
+	if err != nil {
+		t.Fatalf("create cluster: %v", err)
+	}
+	job := createReviewedTestJob(t, app.store, alice.ID, 4)
+	if _, err := app.store.AddJobToTrainingCluster(alice.ID, cluster.ID, job.ID); err != nil {
+		t.Fatalf("add job: %v", err)
+	}
+
+	res := postJSON(handler, "/api/training/clusters/"+cluster.ID+"/train", `{}`, authCookie(t, app, alice))
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("train small status = %d, want %d; body: %s", res.Code, http.StatusBadRequest, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), "20 reviewed jobs") {
+		t.Fatalf("train small body = %q, want minimum review message", res.Body.String())
+	}
+}
+
+func TestTrainingRecordsSidecarFailure(t *testing.T) {
+	t.Setenv("MESH3D_ML_URL", "")
+	app, handler := newTestApp(t)
+	alice, err := app.store.CreateUser("alice", "password123")
+	if err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	cluster, err := app.store.CreateTrainingCluster(alice.ID, "ready")
+	if err != nil {
+		t.Fatalf("create cluster: %v", err)
+	}
+	for i := 0; i < minTrainingReviews; i++ {
+		job := createReviewedTestJob(t, app.store, alice.ID, 3+(i%3))
+		if _, err := app.store.AddJobToTrainingCluster(alice.ID, cluster.ID, job.ID); err != nil {
+			t.Fatalf("add job %d: %v", i, err)
+		}
+	}
+
+	res := postJSON(handler, "/api/training/clusters/"+cluster.ID+"/train", `{}`, authCookie(t, app, alice))
+	if res.Code != http.StatusBadGateway {
+		t.Fatalf("train sidecar failure status = %d, want %d; body: %s", res.Code, http.StatusBadGateway, res.Body.String())
+	}
+	var run TrainingRun
+	if err := json.Unmarshal(res.Body.Bytes(), &run); err != nil {
+		t.Fatalf("decode failed run: %v", err)
+	}
+	if run.Status != "failed" || !strings.Contains(run.Error, "MESH3D_ML_URL") {
+		t.Fatalf("failed run = %+v, want sidecar configuration error", run)
+	}
+}
+
 func TestUploadsAreUserScopedAndFetchable(t *testing.T) {
 	app, handler := newTestApp(t)
 	alice, err := app.store.CreateUser("alice", "password123")
@@ -444,16 +547,55 @@ func newTestApp(t *testing.T) (*App, http.Handler) {
 	mux.HandleFunc("/api/uploads/", app.requireAuth(app.handleUploadRoutes))
 	mux.HandleFunc("/api/jobs", app.requireAuth(app.handleJobs))
 	mux.HandleFunc("/api/jobs/", app.requireAuth(app.handleJobRoutes))
+	mux.HandleFunc("/api/training/clusters", app.requireAuth(app.handleTrainingClusters))
+	mux.HandleFunc("/api/training/clusters/", app.requireAuth(app.handleTrainingRoutes))
 	return app, mux
 }
 
 func resetTestDB(t *testing.T, store *Store) {
 	t.Helper()
 
-	_, err := store.db.Exec(`truncate table job_snapshots, jobs, uploads, users restart identity cascade`)
+	_, err := store.db.Exec(`truncate table config_recommendations, training_runs, training_cluster_jobs, training_clusters, job_snapshots, job_reviews, jobs, uploads, users restart identity cascade`)
 	if err != nil {
 		t.Fatalf("reset test database: %v", err)
 	}
+}
+
+func createReviewedTestJob(t *testing.T, store *Store, userID string, score int) *Job {
+	t.Helper()
+	upload := saveTestUpload(t, store, userID)
+	job, err := store.CreateJob(userID, upload.ID, "reviewed job", map[string]interface{}{
+		"stiffness":             10,
+		"dampingFactor":         0.1,
+		"gravity":               -4.9,
+		"airResistanceFactor":   0.001,
+		"timeStep":              0.01,
+		"snapshotInterval":      0.05,
+		"maxSimTime":            1,
+		"maxSteps":              100,
+		"velocityEpsilon":       0.001,
+		"positionEpsilon":       0.001,
+		"stableFrames":          10,
+		"springSeed":            42,
+		"maxSpringDist":         1.5,
+		"maxSpringsPerParticle": 4,
+		"springConnectProb":     0.8,
+	})
+	if err != nil {
+		t.Fatalf("create reviewed job: %v", err)
+	}
+	tags := []string{"stable"}
+	if score < 4 {
+		tags = []string{"too-slow"}
+	}
+	if _, err := store.SaveJobReviewForUser(userID, job.ID, score, tags, "training label"); err != nil {
+		t.Fatalf("save review: %v", err)
+	}
+	job, ok := store.GetJobForUser(userID, job.ID)
+	if !ok {
+		t.Fatalf("fetch reviewed job")
+	}
+	return job
 }
 
 func saveTestUpload(t *testing.T, store *Store, userID string) Upload {

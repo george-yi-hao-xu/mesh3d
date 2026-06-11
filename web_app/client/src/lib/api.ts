@@ -1,5 +1,5 @@
 import { parseMeshData } from "./mesh-parser";
-import type { AppError, Job, JobFrameResponse, JobReview, MeshFrame, Upload, UploadArtifact, User } from "../types";
+import type { AppError, Job, JobFrameResponse, JobReview, MeshFrame, TrainingCluster, TrainingRun, Upload, UploadArtifact, User } from "../types";
 
 export async function getMe(): Promise<{ user: User }> {
   const res = await fetch("/api/auth/me");
@@ -111,6 +111,68 @@ export async function saveJobReview(jobId: string, review: { score: number; tags
     headers: { "Content-Type": "application/json" },
     // credentials: "same-origin",
     body: JSON.stringify(review),
+  });
+  return readJSON(res);
+}
+
+export async function listTrainingClusters(): Promise<TrainingCluster[]> {
+  const res = await fetch("/api/training/clusters");
+  return readJSON(res);
+}
+
+export async function createTrainingCluster(name: string): Promise<TrainingCluster> {
+  const res = await fetch("/api/training/clusters", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  return readJSON(res);
+}
+
+export async function updateTrainingCluster(clusterId: string, name: string): Promise<TrainingCluster> {
+  const res = await fetch(`/api/training/clusters/${clusterId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  return readJSON(res);
+}
+
+export async function deleteTrainingCluster(clusterId: string): Promise<void> {
+  const res = await fetch(`/api/training/clusters/${clusterId}`, { method: "DELETE" });
+  if (!res.ok) {
+    await readJSON(res);
+  }
+}
+
+export async function addJobToTrainingCluster(clusterId: string, jobId: string): Promise<TrainingCluster> {
+  const res = await fetch(`/api/training/clusters/${clusterId}/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId }),
+  });
+  return readJSON(res);
+}
+
+export async function removeJobFromTrainingCluster(clusterId: string, jobId: string): Promise<TrainingCluster> {
+  const res = await fetch(`/api/training/clusters/${clusterId}/jobs/${jobId}`, { method: "DELETE" });
+  return readJSON(res);
+}
+
+export async function trainCluster(clusterId: string): Promise<TrainingRun> {
+  const res = await fetch(`/api/training/clusters/${clusterId}/train`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  return readJSON(res);
+}
+
+export async function recommendClusterConfig(clusterId: string, uploadId: string): Promise<TrainingCluster> {
+  const res = await fetch(`/api/training/clusters/${clusterId}/recommend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uploadId, candidateCount: 512 }),
   });
   return readJSON(res);
 }

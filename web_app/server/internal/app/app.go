@@ -29,6 +29,10 @@ func (a *App) Routes() http.Handler {
 	// Browser reads, deletes, and downloads checkpoint/final files for one stored job here.
 	mux.HandleFunc("/api/jobs/", a.requireAuth(a.handleJobRoutes))
 
+	// Browser groups reviewed jobs and requests ML training/recommendations here.
+	mux.HandleFunc("/api/training/clusters", a.requireAuth(a.handleTrainingClusters))
+	mux.HandleFunc("/api/training/clusters/", a.requireAuth(a.handleTrainingRoutes))
+
 	// Serve the static frontend files from clientDir.
 	mux.HandleFunc("/", a.handleStatic)
 
