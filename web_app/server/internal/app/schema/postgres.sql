@@ -10,7 +10,7 @@ create table if not exists uploads (
   user_id text not null references users(id) on delete cascade,
   file_name text not null,
   size_bytes bigint not null,
-  object_key text not null,
+  mesh_text text not null,
   mesh_kind text not null default 'uploaded',
   point_count integer,
   edge_count integer,
@@ -23,10 +23,10 @@ create table if not exists jobs (
   upload_id text not null references uploads(id),
   name text,
   input_name text not null,
-  input_object_key text not null,
+  input_mesh_text text not null,
   config jsonb not null,
   status text not null,
-  result_object_key text,
+  result_mesh_text text,
   converged boolean not null default false,
   reason text,
   final_time double precision,
@@ -43,7 +43,8 @@ create table if not exists job_snapshots (
   label text not null,
   sim_time double precision not null,
   step integer not null,
-  object_key text not null,
+  file_name text not null,
+  mesh_text text not null,
   created_at timestamptz not null
 );
 

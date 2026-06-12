@@ -13,7 +13,7 @@ type Upload struct {
 	MeshKind   string    `json:"meshKind"`
 	PointCount int       `json:"pointCount"`
 	EdgeCount  int       `json:"edgeCount"`
-	Path       string    `json:"-"`
+	MeshText   string    `json:"-"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
@@ -28,7 +28,8 @@ type Snapshot struct {
 	Label     string    `json:"label"`
 	SimTime   float64   `json:"simTime"`
 	Step      int       `json:"step"`
-	Path      string    `json:"-"`
+	FileName  string    `json:"-"`
+	MeshText  string    `json:"-"`
 	URL       string    `json:"url"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -49,10 +50,12 @@ type Job struct {
 	UploadID   string                 `json:"uploadId"`
 	Name       string                 `json:"name,omitempty"`
 	InputName  string                 `json:"inputName"`
+	InputText  string                 `json:"-"`
 	Status     string                 `json:"status"`
 	Config     map[string]interface{} `json:"config"`
 	Snapshots  []Snapshot             `json:"snapshots"`
 	ResultURL  string                 `json:"resultUrl,omitempty"`
+	ResultText string                 `json:"-"`
 	Converged  bool                   `json:"converged"`
 	Reason     string                 `json:"reason,omitempty"`
 	FinalTime  float64                `json:"finalTime,omitempty"`
@@ -118,8 +121,7 @@ type JobCreateResponse struct {
 }
 
 type Store struct {
-	db         *sql.DB
-	storageDir string
+	db *sql.DB
 }
 
 type App struct {

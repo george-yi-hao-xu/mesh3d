@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mesh3d}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mesh3d_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-mesh3d}
+    volumes:
+      - mesh3d_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  ml_service:
+    build:
+      context: .
+      dockerfile: ml_service/Dockerfile
+    environment:
+      MESH3D_ENV: production
+      MESH3D_ML_API_KEY: ${MESH3D_ML_API_KEY:-replace_with_shared_ml_key}
+    expose:
+      - "8090"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=2).read()\""
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      MESH3D_ENV: production
+      MESH3D_ADDR: :8080
+      MESH3D_CLIENT_DIR: /app/client/dist
+      MESH3D_DATABASE_URL: postgres://${POSTGRES_USER:-mesh3d}:${POSTGRES_PASSWORD:-mesh3d_dev}@postgres:5432/${POSTGRES_DB:-mesh3d}?sslmode=disable
+      MESH3D_JWT_SECRET: ${MESH3D_JWT_SECRET:-replace_with_a_strong_secret}
+      MESH3D_ML_URL: http://ml_service:8090
+      MESH3D_ML_API_KEY: ${MESH3D_ML_API_KEY:-replace_with_shared_ml_key}
+    ports:
+    # use .env file or environment variables to override the default port mapping
+      - "${MESH3D_SERVER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml_service:
+        condition: service_healthy
+
+volumes:
+  mesh3d_pgdata:

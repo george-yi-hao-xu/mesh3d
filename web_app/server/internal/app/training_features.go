@@ -3,7 +3,6 @@ package app
 import (
 	"bufio"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -27,7 +26,7 @@ func trainingRowsForJobs(store *Store, jobs []*Job) ([]mlTrainingRow, error) {
 		if job == nil || job.Review == nil {
 			continue
 		}
-		features, err := featureMapForMeshAndJob(store.jobInputPath(job.ID), job)
+		features, err := featureMapForMeshAndJob(job.InputText, job)
 		if err != nil {
 			return nil, err
 		}
@@ -42,8 +41,8 @@ func trainingRowsForJobs(store *Store, jobs []*Job) ([]mlTrainingRow, error) {
 	return rows, nil
 }
 
-func featureMapForMeshAndJob(meshPath string, job *Job) (map[string]float64, error) {
-	features, err := meshFeatureMap(meshPath)
+func featureMapForMeshAndJob(meshText string, job *Job) (map[string]float64, error) {
+	features, err := meshFeatureMap(meshText)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +59,7 @@ func featureMapForMeshAndJob(meshPath string, job *Job) (map[string]float64, err
 }
 
 func featureMapForUpload(upload Upload) (map[string]float64, error) {
-	return meshFeatureMap(upload.Path)
+	return meshFeatureMap(upload.MeshText)
 }
 
 func addConfigFeatures(features map[string]float64, config map[string]interface{}) {
@@ -75,19 +74,13 @@ func addConfigFeatures(features map[string]float64, config map[string]interface{
 	}
 }
 
-func meshFeatureMap(path string) (map[string]float64, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
+func meshFeatureMap(text string) (map[string]float64, error) {
 	points := make([]meshFeaturePoint, 0)
 	edges := make([][2]int, 0)
 	lengths := make([]float64, 0)
 	section := ""
 
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(strings.NewReader(text))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {

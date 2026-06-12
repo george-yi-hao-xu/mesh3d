@@ -84,8 +84,7 @@ func TestJobsAndResultsAreUserScoped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create job: %v", err)
 	}
-	resultPath := app.store.jobResultPath(job.ID)
-	if err := os.WriteFile(resultPath, []byte("mesh result"), 0644); err != nil {
+	if _, err := app.store.db.Exec(`update jobs set result_mesh_text = $2, status = 'done' where id = $1`, job.ID, "mesh result"); err != nil {
 		t.Fatalf("write result: %v", err)
 	}
 
@@ -464,8 +463,6 @@ func TestDeleteJobIsOwnedAndOnlyForFinishedJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create job: %v", err)
 	}
-	jobDir := app.store.jobDir(job.ID)
-
 	bobDelete := request(handler, http.MethodDelete, "/api/jobs/"+job.ID, nil, authCookie(t, app, bob))
 	if bobDelete.Code != http.StatusNotFound {
 		t.Fatalf("bob delete status = %d, want %d", bobDelete.Code, http.StatusNotFound)
@@ -481,10 +478,6 @@ func TestDeleteJobIsOwnedAndOnlyForFinishedJobs(t *testing.T) {
 	doneDelete := request(handler, http.MethodDelete, "/api/jobs/"+job.ID, nil, authCookie(t, app, alice))
 	if doneDelete.Code != http.StatusNoContent {
 		t.Fatalf("done delete status = %d, want %d", doneDelete.Code, http.StatusNoContent)
-	}
-
-	if _, err := os.Stat(jobDir); !os.IsNotExist(err) {
-		t.Fatalf("job directory still exists after delete: %v", err)
 	}
 
 	listRes := request(handler, http.MethodGet, "/api/jobs", nil, authCookie(t, app, alice))
@@ -523,7 +516,7 @@ func newTestApp(t *testing.T) (*App, http.Handler) {
 		t.Skip("MESH3D_TEST_DATABASE_URL is required for database-backed server tests")
 	}
 
-	store, err := NewPostgresStore(t.TempDir(), databaseURL)
+	store, err := NewPostgresStore(databaseURL)
 	if err != nil {
 		t.Fatalf("connect postgres: %v", err)
 	}

@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -17,7 +15,7 @@ func (a *App) handleJobs(w http.ResponseWriter, r *http.Request) {
 	// GET /api/jobs
 	case http.MethodGet:
 		writeJSON(w, http.StatusOK, a.store.ListJobs(user.ID))
-	
+
 	// POST a new job
 	// POST /api/jobs
 	case http.MethodPost:
@@ -132,7 +130,7 @@ func (a *App) handleJobRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		a.serveJobFile(w, r, user.ID, jobID, filepath.Join("snapshots", parts[2]))
+		a.serveJobSnapshotFile(w, r, user.ID, jobID, parts[2])
 	case "result":
 		a.serveJobResultFile(w, r, user.ID, jobID)
 	default:
@@ -174,37 +172,40 @@ func (a *App) serveJobResultFile(w http.ResponseWriter, r *http.Request, userID,
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if _, ok := a.store.GetJobForUser(userID, jobID); !ok {
+	job, ok := a.store.GetJobForUser(userID, jobID)
+	if !ok {
 		writeError(w, http.StatusNotFound, "job not found when try to get result file for this job")
 		return
 	}
-	if _, err := os.Stat(a.store.jobResultPath(jobID)); err == nil {
-		serveFile(w, r, a.store.jobResultPath(jobID))
+	if job.ResultText != "" {
+		serveText(w, job.ResultText)
 		return
 	}
 	writeError(w, http.StatusNotFound, "file not found")
 }
 
-// serveJobFile serves generated job artifacts from the job storage directory.
-func (a *App) serveJobFile(w http.ResponseWriter, r *http.Request, userID, jobID string, relPath string) {
+// serveJobSnapshotFile serves generated job artifacts from Postgres.
+func (a *App) serveJobSnapshotFile(w http.ResponseWriter, r *http.Request, userID, jobID string, fileName string) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if _, ok := a.store.GetJobForUser(userID, jobID); !ok {
+	job, ok := a.store.GetJobForUser(userID, jobID)
+	if !ok {
 		writeError(w, http.StatusNotFound, "job not found when try to serve this job file")
 		return
 	}
 
-	path := a.store.jobArtifactPath(jobID, relPath)
-	serveFile(w, r, path)
+	for _, snapshot := range job.Snapshots {
+		if snapshot.FileName == fileName {
+			serveText(w, snapshot.MeshText)
+			return
+		}
+	}
+	writeError(w, http.StatusNotFound, "file not found")
 }
 
-func serveFile(w http.ResponseWriter, r *http.Request, path string) {
-	if _, err := os.Stat(path); err != nil {
-		writeError(w, http.StatusNotFound, "file not found")
-		return
-	}
+func serveText(w http.ResponseWriter, text string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	http.ServeFile(w, r, path)
+	_, _ = w.Write([]byte(text))
 }

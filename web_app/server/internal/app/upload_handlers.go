@@ -3,7 +3,6 @@ package app
 import (
 	"errors"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -80,13 +79,8 @@ func (a *App) handleUploadRoutes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "upload not found")
 		return
 	}
-	data, err := os.ReadFile(upload.Path)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "file not found")
-		return
-	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"upload": upload,
-		"text":   string(data),
+		"text":   upload.MeshText,
 	})
 }

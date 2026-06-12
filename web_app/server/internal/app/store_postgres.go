@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,8 +18,8 @@ import (
 //go:embed schema/postgres.sql
 var schemaFS embed.FS
 
-// NewPostgresStore creates a Store backed by Postgres metadata and local artifact files.
-func NewPostgresStore(storageDir, databaseURL string) (*Store, error) {
+// NewPostgresStore creates a Store backed by Postgres.
+func NewPostgresStore(databaseURL string) (*Store, error) {
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		return nil, err
@@ -30,7 +28,7 @@ func NewPostgresStore(storageDir, databaseURL string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db, storageDir: storageDir}, nil
+	return &Store{db: db}, nil
 }
 
 func (s *Store) initPostgres() error {
@@ -113,12 +111,11 @@ func (s *Store) getUserPostgres(id string) (*User, bool) {
 }
 
 func (s *Store) saveUploadPostgres(upload Upload) error {
-	objectKey := filepath.ToSlash(filepath.Join("uploads", upload.ID+".mesh"))
 	_, err := s.db.Exec(
 		`insert into uploads (
-			id, user_id, file_name, size_bytes, object_key, mesh_kind, point_count, edge_count, created_at
+			id, user_id, file_name, size_bytes, mesh_text, mesh_kind, point_count, edge_count, created_at
 		) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		upload.ID, upload.UserID, upload.FileName, upload.Size, objectKey, upload.MeshKind,
+		upload.ID, upload.UserID, upload.FileName, upload.Size, upload.MeshText, upload.MeshKind,
 		upload.PointCount, upload.EdgeCount, upload.CreatedAt,
 	)
 	return err
@@ -126,22 +123,20 @@ func (s *Store) saveUploadPostgres(upload Upload) error {
 
 func (s *Store) uploadForUser(uploadID, userID string) (Upload, bool) {
 	var upload Upload
-	var objectKey string
 	err := s.db.QueryRow(
-		`select id, user_id, file_name, size_bytes, object_key, mesh_kind, coalesce(point_count, 0), coalesce(edge_count, 0), created_at
+		`select id, user_id, file_name, size_bytes, mesh_text, mesh_kind, coalesce(point_count, 0), coalesce(edge_count, 0), created_at
 		 from uploads where id = $1 and user_id = $2`,
 		uploadID, userID,
-	).Scan(&upload.ID, &upload.UserID, &upload.FileName, &upload.Size, &objectKey, &upload.MeshKind, &upload.PointCount, &upload.EdgeCount, &upload.CreatedAt)
+	).Scan(&upload.ID, &upload.UserID, &upload.FileName, &upload.Size, &upload.MeshText, &upload.MeshKind, &upload.PointCount, &upload.EdgeCount, &upload.CreatedAt)
 	if err != nil {
 		return Upload{}, false
 	}
-	upload.Path = s.artifactPath(objectKey)
 	return upload, true
 }
 
 func (s *Store) listUploadsPostgres(userID string) []Upload {
 	rows, err := s.db.Query(`
-		select id, user_id, file_name, size_bytes, object_key, mesh_kind,
+		select id, user_id, file_name, size_bytes, mesh_text, mesh_kind,
 		       coalesce(point_count, 0), coalesce(edge_count, 0), created_at
 		from uploads
 		where user_id = $1
@@ -155,15 +150,13 @@ func (s *Store) listUploadsPostgres(userID string) []Upload {
 	uploads := make([]Upload, 0)
 	for rows.Next() {
 		var upload Upload
-		var objectKey string
 		if err := rows.Scan(
-			&upload.ID, &upload.UserID, &upload.FileName, &upload.Size, &objectKey, &upload.MeshKind,
+			&upload.ID, &upload.UserID, &upload.FileName, &upload.Size, &upload.MeshText, &upload.MeshKind,
 			&upload.PointCount, &upload.EdgeCount, &upload.CreatedAt,
 		); err != nil {
 			log.Printf("scan upload: %v", err)
 			continue
 		}
-		upload.Path = s.artifactPath(objectKey)
 		uploads = append(uploads, upload)
 	}
 	return uploads
@@ -210,13 +203,12 @@ func (s *Store) insertJobPostgres(job *Job) error {
 	if err != nil {
 		return err
 	}
-	inputObjectKey := filepath.ToSlash(filepath.Join("jobs", job.ID, "input.mesh"))
 	_, err = s.db.Exec(
 		`insert into jobs (
-			id, user_id, upload_id, name, input_name, input_object_key, config, status,
+			id, user_id, upload_id, name, input_name, input_mesh_text, config, status,
 			converged, created_at, updated_at
 		) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		job.ID, job.UserID, job.UploadID, nullableString(job.Name), job.InputName, inputObjectKey,
+		job.ID, job.UserID, job.UploadID, nullableString(job.Name), job.InputName, job.InputText,
 		configJSON, job.Status, job.Converged, job.CreatedAt, job.UpdatedAt,
 	)
 	return err
@@ -224,8 +216,8 @@ func (s *Store) insertJobPostgres(job *Job) error {
 
 func (s *Store) listJobsPostgres(userID string) []*Job {
 	rows, err := s.db.Query(`
-		select id, user_id, upload_id, name, input_name, input_object_key, config, status,
-		       result_object_key, converged, reason, final_time, final_step, error,
+		select id, user_id, upload_id, name, input_name, input_mesh_text, config, status,
+		       result_mesh_text, converged, reason, final_time, final_step, error,
 		       created_at, updated_at, finished_at
 		from jobs
 		where user_id = $1
@@ -272,8 +264,8 @@ func (s *Store) getJobForUserPostgres(userID, id string) (*Job, bool) {
 
 func (s *Store) queryJob(where string, args ...interface{}) (*Job, error) {
 	query := fmt.Sprintf(`
-		select id, user_id, upload_id, name, input_name, input_object_key, config, status,
-		       result_object_key, converged, reason, final_time, final_step, error,
+		select id, user_id, upload_id, name, input_name, input_mesh_text, config, status,
+		       result_mesh_text, converged, reason, final_time, final_step, error,
 		       created_at, updated_at, finished_at
 		from jobs %s`, where)
 	job, err := scanJobRows(s.db.QueryRow(query, args...))
@@ -296,9 +288,6 @@ func (s *Store) deleteJobForUserPostgres(userID, id string) error {
 	}
 	if job.Status == "queued" || job.Status == "running" {
 		return errJobNotDeletable
-	}
-	if err := os.RemoveAll(s.jobDir(id)); err != nil {
-		return err
 	}
 	_, err := s.db.Exec(`delete from jobs where id = $1 and user_id = $2`, id, userID)
 	return err
@@ -325,15 +314,10 @@ func (s *Store) setJobStatusPostgres(id, status, msg string) {
 }
 
 func (s *Store) addSnapshotPostgres(jobID string, snapshot Snapshot) {
-	fileName := filepath.Base(snapshot.Path)
-	if fileName == "." || fileName == string(filepath.Separator) || fileName == "" {
-		fileName = filepath.Base(snapshot.URL)
-	}
-	objectKey := filepath.ToSlash(filepath.Join("jobs", jobID, "snapshots", fileName))
 	_, err := s.db.Exec(
-		`insert into job_snapshots (job_id, label, sim_time, step, object_key, created_at)
-		 values ($1, $2, $3, $4, $5, $6)`,
-		jobID, snapshot.Label, snapshot.SimTime, snapshot.Step, objectKey, snapshot.CreatedAt,
+		`insert into job_snapshots (job_id, label, sim_time, step, file_name, mesh_text, created_at)
+		 values ($1, $2, $3, $4, $5, $6, $7)`,
+		jobID, snapshot.Label, snapshot.SimTime, snapshot.Step, snapshot.FileName, snapshot.MeshText, snapshot.CreatedAt,
 	)
 	if err != nil {
 		log.Printf("add snapshot %s: %v", jobID, err)
@@ -344,13 +328,12 @@ func (s *Store) addSnapshotPostgres(jobID string, snapshot Snapshot) {
 	}
 }
 
-func (s *Store) setResultPostgres(jobID string, result solver.SolverResult) {
+func (s *Store) setResultTextPostgres(jobID string, result solver.SolverResult, meshText string) {
 	now := time.Now().UTC()
-	objectKey := filepath.ToSlash(filepath.Join("jobs", jobID, "final.mesh"))
 	_, err := s.db.Exec(
 		`update jobs
 		 set status = 'done',
-		     result_object_key = $2,
+		     result_mesh_text = $2,
 		     converged = $3,
 		     reason = $4,
 		     final_time = $5,
@@ -358,7 +341,7 @@ func (s *Store) setResultPostgres(jobID string, result solver.SolverResult) {
 		     updated_at = $7,
 		     finished_at = $7
 		 where id = $1`,
-		jobID, objectKey, result.Converged, nullableString(result.Reason), result.SimTime, result.Step, now,
+		jobID, meshText, result.Converged, nullableString(result.Reason), result.SimTime, result.Step, now,
 	)
 	if err != nil {
 		log.Printf("set result %s: %v", jobID, err)
@@ -367,7 +350,7 @@ func (s *Store) setResultPostgres(jobID string, result solver.SolverResult) {
 
 func (s *Store) loadSnapshots(job *Job) error {
 	rows, err := s.db.Query(
-		`select label, sim_time, step, object_key, created_at
+		`select label, sim_time, step, file_name, mesh_text, created_at
 		 from job_snapshots
 		 where job_id = $1
 		 order by step asc, id asc`, job.ID)
@@ -379,12 +362,10 @@ func (s *Store) loadSnapshots(job *Job) error {
 	job.Snapshots = nil
 	for rows.Next() {
 		var snapshot Snapshot
-		var objectKey string
-		if err := rows.Scan(&snapshot.Label, &snapshot.SimTime, &snapshot.Step, &objectKey, &snapshot.CreatedAt); err != nil {
+		if err := rows.Scan(&snapshot.Label, &snapshot.SimTime, &snapshot.Step, &snapshot.FileName, &snapshot.MeshText, &snapshot.CreatedAt); err != nil {
 			return err
 		}
-		snapshot.Path = s.artifactPath(objectKey)
-		snapshot.URL = "/api/jobs/" + job.ID + "/snapshots/" + filepath.Base(objectKey)
+		snapshot.URL = "/api/jobs/" + job.ID + "/snapshots/" + snapshot.FileName
 		job.Snapshots = append(job.Snapshots, snapshot)
 	}
 	return rows.Err()
@@ -425,10 +406,6 @@ func (s *Store) loadReview(job *Job) error {
 	return nil
 }
 
-func (s *Store) artifactPath(objectKey string) string {
-	return filepath.Join(s.storageDir, filepath.FromSlash(objectKey))
-}
-
 type rowScanner interface {
 	Scan(dest ...interface{}) error
 }
@@ -444,15 +421,14 @@ func scanUser(row rowScanner) (*User, error) {
 
 func scanJobRows(row rowScanner) (*Job, error) {
 	var job Job
-	var name, resultObjectKey, reason, errorText sql.NullString
+	var name, resultText, reason, errorText sql.NullString
 	var finalTime sql.NullFloat64
 	var finalStep sql.NullInt64
 	var finishedAt sql.NullTime
-	var inputObjectKey string
 	var configJSON []byte
 	err := row.Scan(
-		&job.ID, &job.UserID, &job.UploadID, &name, &job.InputName, &inputObjectKey, &configJSON, &job.Status,
-		&resultObjectKey, &job.Converged, &reason, &finalTime, &finalStep, &errorText,
+		&job.ID, &job.UserID, &job.UploadID, &name, &job.InputName, &job.InputText, &configJSON, &job.Status,
+		&resultText, &job.Converged, &reason, &finalTime, &finalStep, &errorText,
 		&job.CreatedAt, &job.UpdatedAt, &finishedAt,
 	)
 	if err != nil {
@@ -466,7 +442,8 @@ func scanJobRows(row rowScanner) (*Job, error) {
 			return nil, err
 		}
 	}
-	if resultObjectKey.Valid {
+	if resultText.Valid {
+		job.ResultText = resultText.String
 		job.ResultURL = "/api/jobs/" + job.ID + "/result"
 	}
 	if reason.Valid {
