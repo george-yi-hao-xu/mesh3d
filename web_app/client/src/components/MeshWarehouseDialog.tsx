@@ -1,15 +1,23 @@
-import { ChangeEvent, MouseEvent, useEffect, useRef } from "react";
+import { ChangeEvent, MouseEvent, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { formatDate } from "../lib/format";
 import { useStores } from "../stores/store-context";
 import type { Upload } from "../types";
 import "./MeshWarehouseDialog.scss";
 
+type MeshKind = NonNullable<Upload["meshKind"]>;
+
 export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
   const { warehouse } = useStores();
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const [selectedMeshKind, setSelectedMeshKind] = useState<MeshKind>("uploaded");
   const deleteUpload = warehouse.deleteOverlayUpload;
   const deleteOverlayOpen = Boolean(deleteUpload);
+
+  useEffect(() => {
+    if (!warehouse.pickerOpen) return;
+    setSelectedMeshKind(uploadKind(warehouse.selectedUpload));
+  }, [warehouse.pickerOpen, warehouse.selectedUpload]);
 
   useEffect(() => {
     if (!deleteOverlayOpen) return undefined;
@@ -23,6 +31,10 @@ export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
   }, [warehouse, deleteOverlayOpen]);
 
   if (!warehouse.pickerOpen) return null;
+
+  const filteredUploads = warehouse.uploads.filter((upload) => uploadKind(upload) === selectedMeshKind);
+  const emptyFilterMessage =
+    selectedMeshKind === "generated" ? "No generated meshes saved yet." : "No uploaded meshes saved yet.";
 
   function uploadNew(event: ChangeEvent<HTMLInputElement>): void {
     const file = event.target.files?.[0] || null;
@@ -55,10 +67,36 @@ export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
 
         {warehouse.error ? <p className="overlay-error">{warehouse.error}</p> : null}
 
+        <fieldset className="mesh-kind-filter" aria-label="Mesh type">
+          <label className={`mesh-kind-option ${selectedMeshKind === "uploaded" ? "active" : ""}`}>
+            <input
+              type="radio"
+              name="meshKindFilter"
+              value="uploaded"
+              checked={selectedMeshKind === "uploaded"}
+              onChange={() => setSelectedMeshKind("uploaded")}
+            />
+            <span>Uploaded</span>
+          </label>
+          <label className={`mesh-kind-option ${selectedMeshKind === "generated" ? "active" : ""}`}>
+            <input
+              type="radio"
+              name="meshKindFilter"
+              value="generated"
+              checked={selectedMeshKind === "generated"}
+              onChange={() => setSelectedMeshKind("generated")}
+            />
+            <span>Generated</span>
+          </label>
+        </fieldset>
+
         <div className="mesh-warehouse-list">
           {warehouse.loading && warehouse.uploads.length === 0 ? <p className="mesh-warehouse-empty">Loading meshes.</p> : null}
           {!warehouse.loading && warehouse.uploads.length === 0 ? <p className="mesh-warehouse-empty">No meshes saved yet.</p> : null}
-          {warehouse.uploads.map((upload) => (
+          {!warehouse.loading && warehouse.uploads.length > 0 && filteredUploads.length === 0 ? (
+            <p className="mesh-warehouse-empty">{emptyFilterMessage}</p>
+          ) : null}
+          {filteredUploads.map((upload) => (
             <div key={upload.id} className="mesh-warehouse-list-item">
               <div
                 key={upload.id}
@@ -110,8 +148,12 @@ export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
   );
 });
 
+function uploadKind(upload: Upload | null | undefined): MeshKind {
+  return upload?.meshKind === "generated" ? "generated" : "uploaded";
+}
+
 function uploadMeta(upload: Upload): string {
-  const kind = upload.meshKind === "generated" ? "generated" : "uploaded";
+  const kind = upload.meshKind === "generated" ? "generated (with generated springs)" : "uploaded (raw)";
   const points = `${upload.pointCount || 0} points`;
   const edges = `${upload.edgeCount || 0} springs`;
   return `${kind} - ${points} - ${edges} - ${formatBytes(upload.size)} - ${formatDate(upload.createdAt)}`;
