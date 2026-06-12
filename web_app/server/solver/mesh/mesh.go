@@ -3,6 +3,7 @@ package mesh
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strconv"
@@ -27,7 +28,17 @@ type Config struct {
 
 // NewMeshModelFromMeshFile loads particles and explicit spring topology from a mesh-v1 file.
 func NewMeshModelFromMeshFile(path string, cfg Config) (*MeshModel, error) {
-	particles, springs, err := loadMeshV1(path, cfg.Stiffness)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return NewMeshModelFromReader(file, cfg)
+}
+
+// NewMeshModelFromReader loads particles and explicit spring topology from mesh-v1 text.
+func NewMeshModelFromReader(r io.Reader, cfg Config) (*MeshModel, error) {
+	particles, springs, err := loadMeshV1(r, cfg.Stiffness)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +99,11 @@ func (m *MeshModel) WriteMeshSnapshot(path string, simTime float64, step int, fi
 		return err
 	}
 	defer out.Close()
+	return m.WriteMeshSnapshotTo(out, simTime, step, final)
+}
 
+// WriteMeshSnapshotTo writes particle positions and spring topology in the mesh-v1 format.
+func (m *MeshModel) WriteMeshSnapshotTo(out io.Writer, simTime float64, step int, final bool) error {
 	kind := "checkpoint"
 	if final {
 		kind = "final"
@@ -131,13 +146,7 @@ func (m *MeshModel) WriteMeshSnapshot(path string, simTime float64, step int, fi
 	return nil
 }
 
-func loadMeshV1(path string, defaultStiffness float64) ([]ParticleNode, []SpringEdge, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer file.Close()
-
+func loadMeshV1(r io.Reader, defaultStiffness float64) ([]ParticleNode, []SpringEdge, error) {
 	var particles []ParticleNode
 	var edgeRows []struct {
 		a          int
@@ -148,7 +157,7 @@ func loadMeshV1(path string, defaultStiffness float64) ([]ParticleNode, []Spring
 	}
 	section := ""
 	hasMeshFormat := false
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(r)
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++

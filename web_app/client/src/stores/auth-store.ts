@@ -34,6 +34,7 @@ export class AuthStore {
       });
       await this.root.warehouse.refreshUploads();
       await this.root.jobs.refreshJobs();
+      await this.root.learning.refreshClusters();
     } catch {
       runInAction(() => {
         this.currentUser = null;
@@ -83,6 +84,7 @@ export class AuthStore {
       });
       await this.root.warehouse.refreshUploads();
       await this.root.jobs.refreshJobs();
+      await this.root.learning.refreshClusters();
     } catch (error) {
       runInAction(() => {
         this.error = getErrorMessage(error);
@@ -103,6 +105,7 @@ export class AuthStore {
     this.root.jobs.reset();
     this.root.preview.reset();
     this.root.warehouse.reset();
+    this.root.learning.reset();
     this.root.viewer.clear("No mesh loaded.");
   }
 

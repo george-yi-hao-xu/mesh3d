@@ -1,4 +1,5 @@
 import { observer } from "mobx-react-lite";
+import { FaBackward, FaBackwardStep, FaForward, FaForwardStep, FaPause, FaPlay } from "react-icons/fa6";
 import { useStores } from "../stores/store-context";
 import "./TimelineControls.scss";
 
@@ -18,20 +19,26 @@ export const TimelineControls = observer(function TimelineControls() {
       <div className="frame-head">
         <div className="frame-tools">
           <div className="transport-controls" aria-label="Timeline controls">
-            <button className="transport-button" type="button" disabled={disabled} onClick={() => jobs.selectFrameAt(0)}>
-              |&lt;
+            <button className="transport-button" type="button" disabled={disabled} onClick={() => jobs.selectFrameAt_safe(0)} aria-label="First frame" title="First frame">
+              <FaBackwardStep aria-hidden="true" />
             </button>
-            <button className="transport-button" type="button" disabled={disabled} onClick={() => jobs.togglePlayback()}>
-              {jobs.playback ? "Pause" : "Play"}
+            <button className="transport-button" type="button" disabled={disabled} onClick={() => jobs.selectFrameAt_safe(selectedIndex - 1)} aria-label="Previous frame" title="Previous frame">
+              <FaBackward aria-hidden="true" />
             </button>
-            <button className="transport-button" type="button" disabled={disabled} onClick={() => {
+            <button className="transport-button" type="button" disabled={disabled} onClick={() => jobs.togglePlayback()} aria-label={jobs.playback ? "Pause playback" : "Play frames"} title={jobs.playback ? "Pause playback" : "Play frames"}>
+              {jobs.playback ? <FaPause aria-hidden="true" /> : <FaPlay aria-hidden="true" />}
+            </button>
+            {/* <button className="transport-button" type="button" disabled={disabled} onClick={() => {
               jobs.stopPlayback();
               jobs.selectFrameAt(0);
             }}>
               Stop
+            </button> */}
+            <button className="transport-button" type="button" disabled={disabled} onClick={() => jobs.selectFrameAt_safe(selectedIndex + 1)} aria-label="Next frame" title="Next frame">
+              <FaForward aria-hidden="true" />
             </button>
-            <button className="transport-button" type="button" disabled={disabled} onClick={() => jobs.selectFrameAt(frames.length - 1)}>
-              &gt;|
+            <button className="transport-button" type="button" disabled={disabled} onClick={() => jobs.selectFrameAt_safe(frames.length - 1)} aria-label="Last frame" title="Last frame">
+              <FaForwardStep aria-hidden="true" />
             </button>
           </div>
           <span className="frame-title">Time frame</span>
@@ -47,7 +54,7 @@ export const TimelineControls = observer(function TimelineControls() {
         value={selectedIndex}
         onChange={(event) => {
           jobs.stopPlayback();
-          jobs.selectFrameAt(Number(event.target.value));
+          jobs.selectFrameAt_safe(Number(event.target.value));
         }}
       />
       <div className="frame-scale">

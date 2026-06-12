@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bufio"
@@ -7,7 +7,6 @@ import (
 	"io"
 	"math"
 	"mime/multipart"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -25,6 +24,7 @@ var (
 	errJobNotFound     = errors.New("job not found")
 	errJobNotDeletable = errors.New("job is not finished")
 	errUploadNotFound  = errors.New("upload not found")
+	errInvalidReview   = errors.New("review score must be between 1 and 5")
 )
 
 type uploadInUseError struct {
@@ -35,45 +35,8 @@ func (e uploadInUseError) Error() string {
 	return "mesh is used by existing jobs; delete those jobs first"
 }
 
-func (s *Store) uploadMeshPath(uploadID string) string {
-	return filepath.Join(s.storageDir, "uploads", uploadID+".mesh")
-}
-
-func (s *Store) jobDir(jobID string) string {
-	return filepath.Join(s.storageDir, "jobs", jobID)
-}
-
-func (s *Store) jobInputPath(jobID string) string {
-	return filepath.Join(s.jobDir(jobID), "input.mesh")
-}
-
-func (s *Store) jobSnapshotDir(jobID string) string {
-	return filepath.Join(s.jobDir(jobID), "snapshots")
-}
-
-func (s *Store) jobSnapshotPath(jobID, fileName string) string {
-	return filepath.Join(s.jobSnapshotDir(jobID), fileName)
-}
-
-func (s *Store) jobResultPath(jobID string) string {
-	return filepath.Join(s.jobDir(jobID), "final.mesh")
-}
-
-func (s *Store) jobArtifactPath(jobID, relPath string) string {
-	return filepath.Join(s.jobDir(jobID), relPath)
-}
-
-// Init creates local artifact folders and applies the Postgres schema.
+// Init applies the Postgres schema.
 func (s *Store) Init() error {
-	for _, dir := range []string{
-		s.storageDir,
-		filepath.Join(s.storageDir, "uploads"),
-		filepath.Join(s.storageDir, "jobs"),
-	} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
 	return s.initPostgres()
 }
 
@@ -103,24 +66,15 @@ func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart
 		meshKind = "uploaded"
 	}
 
-	path := s.uploadMeshPath(id)
-	out, err := os.Create(path)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return Upload{}, err
 	}
-	defer out.Close()
+	meshText := string(data)
+	size := int64(len(data))
 
-	size, err := io.Copy(out, file)
+	pointCount, edgeCount, err := inspectMeshText(meshText)
 	if err != nil {
-		return Upload{}, err
-	}
-	if err := out.Close(); err != nil {
-		return Upload{}, err
-	}
-
-	pointCount, edgeCount, err := inspectMeshFile(path)
-	if err != nil {
-		_ = os.Remove(path)
 		return Upload{}, err
 	}
 
@@ -132,7 +86,7 @@ func (s *Store) SaveUpload(userID string, file multipart.File, header *multipart
 		MeshKind:   meshKind,
 		PointCount: pointCount,
 		EdgeCount:  edgeCount,
-		Path:       path,
+		MeshText:   meshText,
 		CreatedAt:  time.Now().UTC(),
 	}
 	if err := s.saveUploadPostgres(upload); err != nil {
@@ -153,23 +107,17 @@ func (s *Store) GetUploadForUser(userID, uploadID string) (Upload, bool) {
 
 // DeleteUploadForUser removes an unused user-owned warehouse mesh artifact.
 func (s *Store) DeleteUploadForUser(userID, uploadID string) error {
-	upload, ok := s.uploadForUser(uploadID, userID)
-
-	if !ok {
+	if _, ok := s.uploadForUser(uploadID, userID); !ok {
 		return errUploadNotFound
 	}
 
 	if err := s.deleteUploadPostgres(userID, uploadID); err != nil {
 		return err
 	}
-
-	if err := os.Remove(upload.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
 	return nil
 }
 
-// CreateJob creates a job folder with input copied from a prior upload.
+// CreateJob creates a job with immutable input copied from a prior upload.
 func (s *Store) CreateJob(userID, uploadID, name string, config map[string]interface{}) (*Job, error) {
 	upload, ok := s.uploadForUser(uploadID, userID)
 	if !ok {
@@ -180,12 +128,6 @@ func (s *Store) CreateJob(userID, uploadID, name string, config map[string]inter
 	}
 
 	id := newID("job")
-	if err := os.MkdirAll(s.jobSnapshotDir(id), 0755); err != nil {
-		return nil, err
-	}
-	if err := copyFile(upload.Path, s.jobInputPath(id)); err != nil {
-		return nil, err
-	}
 
 	now := time.Now().UTC()
 	name = strings.TrimSpace(name)
@@ -199,6 +141,7 @@ func (s *Store) CreateJob(userID, uploadID, name string, config map[string]inter
 		UploadID:  upload.ID,
 		Name:      name,
 		InputName: upload.FileName,
+		InputText: upload.MeshText,
 		Status:    "queued",
 		Config:    config,
 		CreatedAt: now,
@@ -221,14 +164,8 @@ func defaultJobName(createdAt time.Time, inputName string) string {
 	return createdAt.Format("2006-01-02_15-04-05") + "_" + meshName
 }
 
-func inspectMeshFile(path string) (int, int, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
+func inspectMeshText(text string) (int, int, error) {
+	scanner := bufio.NewScanner(strings.NewReader(text))
 	section := ""
 	hasMeshFormat := false
 	pointCount := 0
@@ -345,8 +282,52 @@ func (s *Store) AddSnapshot(jobID string, snapshot Snapshot) {
 }
 
 // SetResult marks a job finished and stores the solver outcome.
-func (s *Store) SetResult(jobID string, result solver.SolverResult) {
-	s.setResultPostgres(jobID, result)
+func (s *Store) SetResult(jobID string, result solver.SolverResult, meshText string) {
+	s.setResultTextPostgres(jobID, result, meshText)
+}
+
+// SaveJobReviewForUser stores a user's label for one of their jobs.
+func (s *Store) SaveJobReviewForUser(userID, jobID string, score int, tags []string, note string) (*JobReview, error) {
+	if score < 1 || score > 5 {
+		return nil, errInvalidReview
+	}
+	if _, ok := s.GetJobForUser(userID, jobID); !ok {
+		return nil, errJobNotFound
+	}
+	review := JobReview{
+		JobID:     jobID,
+		UserID:    userID,
+		Score:     score,
+		Tags:      normalizeReviewTags(tags),
+		Note:      strings.TrimSpace(note),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := s.upsertJobReviewPostgres(&review); err != nil {
+		return nil, err
+	}
+	return &review, nil
+}
+
+func normalizeReviewTags(tags []string) []string {
+	seen := make(map[string]bool, len(tags))
+	normalized := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		tag = strings.ToLower(strings.TrimSpace(tag))
+		tag = strings.Join(strings.Fields(tag), "-")
+		if tag == "" || seen[tag] {
+			continue
+		}
+		if len(tag) > 32 {
+			tag = tag[:32]
+		}
+		seen[tag] = true
+		normalized = append(normalized, tag)
+		if len(normalized) >= 12 {
+			break
+		}
+	}
+	return normalized
 }
 
 func normalizeUsername(username string) (string, string, error) {
@@ -387,6 +368,11 @@ func cloneJob(job *Job) *Job {
 	}
 	cp := *job
 	cp.Snapshots = append([]Snapshot(nil), job.Snapshots...)
+	if job.Review != nil {
+		review := *job.Review
+		review.Tags = append([]string(nil), job.Review.Tags...)
+		cp.Review = &review
+	}
 	if job.Config != nil {
 		cp.Config = make(map[string]interface{}, len(job.Config))
 		for k, v := range job.Config {

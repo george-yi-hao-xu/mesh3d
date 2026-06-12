@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"crypto/rand"
@@ -76,7 +76,7 @@ func safePathPart(part string) bool {
 }
 
 // envOr reads an environment variable or returns a fallback.
-func envOr(key, fallback string) string {
+func EnvOr(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
 	}
@@ -85,7 +85,17 @@ func envOr(key, fallback string) string {
 
 // loadDotEnv reads KEY=value pairs from a local .env file without overriding
 // variables already provided by the shell.
-func loadDotEnv(path string) error {
+func LoadDotEnv(path string) error {
+	return loadDotEnv(path, false)
+}
+
+// LoadDotEnvOverride reads KEY=value pairs and overwrites values previously
+// loaded from another env file.
+func LoadDotEnvOverride(path string) error {
+	return loadDotEnv(path, true)
+}
+
+func loadDotEnv(path string, override bool) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -119,7 +129,7 @@ func loadDotEnv(path string) error {
 				value = value[1 : len(value)-1]
 			}
 		}
-		if os.Getenv(key) == "" {
+		if override || os.Getenv(key) == "" {
 			if err := os.Setenv(key, value); err != nil {
 				return fmt.Errorf("set %s from %s:%d: %w", key, path, lineNumber+1, err)
 			}
@@ -129,8 +139,28 @@ func loadDotEnv(path string) error {
 	return nil
 }
 
+// LoadEnvFiles loads base .env values, then overlays .env.<MESH3D_ENV>.
+// Variables already provided by the shell win over both files.
+func LoadEnvFiles(basePath string) error {
+	initial := os.Environ()
+	if err := LoadDotEnv(basePath); err != nil {
+		return err
+	}
+	env := EnvOr("MESH3D_ENV", "development")
+	if err := LoadDotEnvOverride(basePath + "." + env); err != nil {
+		return err
+	}
+	for _, pair := range initial {
+		key, value, ok := strings.Cut(pair, "=")
+		if ok {
+			_ = os.Setenv(key, value)
+		}
+	}
+	return nil
+}
+
 // logRequests wraps an HTTP handler with simple method/path/duration logging.
-func logRequests(next http.Handler) http.Handler {
+func LogRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)

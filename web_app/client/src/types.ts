@@ -27,6 +27,15 @@ export type Snapshot = {
   createdAt?: string;
 };
 
+export type JobReview = {
+  jobId: string;
+  score: number;
+  tags: string[];
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Job = {
   id: string;
   userId?: string;
@@ -45,6 +54,46 @@ export type Job = {
   createdAt: string;
   updatedAt?: string;
   finishedAt?: string;
+  review?: JobReview;
+};
+
+export type TrainingClusterJob = {
+  clusterId?: string;
+  job: Job;
+  addedAt: string;
+};
+
+export type TrainingRun = {
+  id: string;
+  clusterId: string;
+  status: string;
+  metrics: Record<string, unknown>;
+  modelArtifact?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+};
+
+export type ConfigRecommendation = {
+  runId?: string;
+  rank: number;
+  config: Record<string, unknown>;
+  predictedScore: number;
+  predictedTags: string[];
+  createdAt: string;
+};
+
+export type TrainingCluster = {
+  id: string;
+  userId?: string;
+  name: string;
+  status: string;
+  jobs: TrainingClusterJob[];
+  latestRun?: TrainingRun;
+  recommendations?: ConfigRecommendation[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type JobFrameResponse = {

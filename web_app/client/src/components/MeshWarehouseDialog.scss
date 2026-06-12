@@ -12,6 +12,53 @@
   align-items: flex-start;
 }
 
+.mesh-kind-filter {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  width: fit-content;
+  margin: 16px 0 0;
+  padding: 2px;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  background: #f4f7fa;
+}
+
+.mesh-kind-option {
+  position: relative;
+  min-width: 104px;
+  border-radius: 6px;
+  color: #607080;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+
+  input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  span {
+    display: block;
+    padding: 7px 14px;
+  }
+
+  &.active {
+    background: #ffffff;
+    color: #18202a;
+    box-shadow: 0 1px 3px rgba(24, 32, 42, 0.12);
+  }
+
+  &:has(input:focus-visible) {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+  }
+}
+
 .mesh-warehouse-list {
   display: grid;
   gap: 8px;

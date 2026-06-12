@@ -1,5 +1,5 @@
 import { parseMeshData } from "./mesh-parser";
-import type { AppError, Job, JobFrameResponse, MeshFrame, Upload, UploadArtifact, User } from "../types";
+import type { AppError, Job, JobFrameResponse, JobReview, MeshFrame, TrainingCluster, TrainingRun, Upload, UploadArtifact, User } from "../types";
 
 export async function getMe(): Promise<{ user: User }> {
   const res = await fetch("/api/auth/me");
@@ -51,11 +51,13 @@ export async function uploadMeshArtifact(file: File | Blob | undefined, fileName
   return readJSON(res);
 }
 
+// GET all uploads (initial meshes)
 export async function listUploads(): Promise<Upload[]> {
   const res = await fetch("/api/uploads");
   return readJSON(res);
 }
 
+// GET a specific upload artifact
 export async function fetchUploadArtifact(uploadId: string): Promise<UploadArtifact> {
   const res = await fetch(`/api/uploads/${uploadId}`);
   return readJSON(res);
@@ -72,6 +74,7 @@ export async function deleteUpload(uploadId: string): Promise<void> {
   }
 }
 
+// run solver
 export async function createJob(uploadId: string, name: string, config: Record<string, number>): Promise<{ job: Job; frames: MeshFrame[] }> {
   const res = await fetch("/api/jobs", {
     method: "POST",
@@ -100,6 +103,78 @@ export async function deleteJob(jobId: string): Promise<void> {
   if (!res.ok) {
     await readJSON(res);
   }
+}
+
+export async function saveJobReview(jobId: string, review: { score: number; tags: string[]; note: string }): Promise<JobReview> {
+  const res = await fetch(`/api/jobs/${jobId}/review`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    // credentials: "same-origin",
+    body: JSON.stringify(review),
+  });
+  return readJSON(res);
+}
+
+export async function listTrainingClusters(): Promise<TrainingCluster[]> {
+  const res = await fetch("/api/training/clusters");
+  return readJSON(res);
+}
+
+export async function createTrainingCluster(name: string): Promise<TrainingCluster> {
+  const res = await fetch("/api/training/clusters", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  return readJSON(res);
+}
+
+export async function updateTrainingCluster(clusterId: string, name: string): Promise<TrainingCluster> {
+  const res = await fetch(`/api/training/clusters/${clusterId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  return readJSON(res);
+}
+
+export async function deleteTrainingCluster(clusterId: string): Promise<void> {
+  const res = await fetch(`/api/training/clusters/${clusterId}`, { method: "DELETE" });
+  if (!res.ok) {
+    await readJSON(res);
+  }
+}
+
+export async function addJobToTrainingCluster(clusterId: string, jobId: string): Promise<TrainingCluster> {
+  const res = await fetch(`/api/training/clusters/${clusterId}/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId }),
+  });
+  return readJSON(res);
+}
+
+export async function removeJobFromTrainingCluster(clusterId: string, jobId: string): Promise<TrainingCluster> {
+  const res = await fetch(`/api/training/clusters/${clusterId}/jobs/${jobId}`, { method: "DELETE" });
+  return readJSON(res);
+}
+
+export async function trainCluster(clusterId: string): Promise<TrainingRun> {
+  const res = await fetch(`/api/training/clusters/${clusterId}/train`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  return readJSON(res);
+}
+
+export async function recommendClusterConfig(clusterId: string, uploadId: string): Promise<TrainingCluster> {
+  const res = await fetch(`/api/training/clusters/${clusterId}/recommend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uploadId, candidateCount: 512 }),
+  });
+  return readJSON(res);
 }
 
 export async function fetchMeshData(url: string): Promise<{ text: string; pointCloud: ReturnType<typeof parseMeshData> }> {

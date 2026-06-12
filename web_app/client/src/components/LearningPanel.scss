@@ -1,0 +1,143 @@
+.learning-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 18px;
+  padding: 18px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.learning-sidebar,
+.learning-main {
+  overflow: auto;
+}
+
+.learning-head,
+.learning-actions,
+.cluster-rename {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.learning-head h3,
+.recommendation-card h4 {
+  margin: 0;
+}
+
+.cluster-create,
+.cluster-rename {
+  margin: 16px 0;
+}
+
+.cluster-rename label {
+  flex: 1;
+}
+
+.cluster-list,
+.reviewed-job-list,
+.recommendation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.cluster-item,
+.reviewed-job {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid #d9e0e7;
+  background: #fbfcfe;
+  color: #18202a;
+  text-align: left;
+}
+
+.cluster-item.active,
+.reviewed-job.selected {
+  border-color: var(--accent-color);
+  background: #eef5ff;
+}
+
+.cluster-title,
+.reviewed-job span:first-child {
+  font-weight: 700;
+}
+
+.learning-actions {
+  justify-content: flex-start;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.learning-actions span,
+.run-summary span,
+.cluster-item span:last-child,
+.reviewed-job span:last-child {
+  color: #607080;
+  font-size: 12px;
+}
+
+.run-summary {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  background: #fbfcfe;
+  margin: 12px 0;
+}
+
+.run-summary.failed,
+.learning-error {
+  border-color: var(--alert-color);
+  color: var(--alert-color);
+}
+
+.learning-section {
+  margin-top: 20px;
+}
+
+.recommendation-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #d9e0e7;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.recommendation-card dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.recommendation-card div {
+  min-width: 0;
+}
+
+.recommendation-card dt {
+  color: #607080;
+  font-size: 11px;
+}
+
+.recommendation-card dd {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .learning-layout {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .learning-sidebar,
+  .learning-main {
+    overflow: visible;
+  }
+}

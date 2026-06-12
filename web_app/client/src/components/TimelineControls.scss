@@ -32,9 +32,12 @@
 }
 
 .transport-button {
-  width: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
   min-height: 28px;
-  padding: 5px 0;
+  padding: 5px;
   border: 1px solid #c8d2dc;
   background: #ffffff;
   color: var(--accent-color);

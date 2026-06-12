@@ -1,5 +1,6 @@
 import { observer } from "mobx-react-lite";
 import { MeshCanvas } from "./MeshCanvas";
+import { JobReviewPanel } from "./JobReviewPanel";
 import { TimelineControls } from "./TimelineControls";
 import { useStores } from "../stores/store-context";
 import "./ViewerPanel.scss";
@@ -61,6 +62,7 @@ export const ViewerPanel = observer(function ViewerPanel() {
       ) : null}
       <TimelineControls />
       <MeshCanvas />
+      <JobReviewPanel />
       <details className="raw-mesh">
         <summary>Raw mesh artifact</summary>
         <pre className="mesh-preview">{jobs.rawPreviewText}</pre>

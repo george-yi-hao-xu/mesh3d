@@ -2,6 +2,7 @@ package solver
 
 import (
 	"fmt"
+	"io"
 	"math"
 
 	"mesh3d/web_app/server/solver/mesh"
@@ -10,6 +11,11 @@ import (
 // NewMeshModelFromMeshFile adapts solver config to an explicit mesh topology file.
 func NewMeshModelFromMeshFile(path string, cfg SolverConfig) (*mesh.MeshModel, error) {
 	return mesh.NewMeshModelFromMeshFile(path, meshConfig(cfg))
+}
+
+// NewMeshModelFromReader adapts solver config to explicit mesh topology text.
+func NewMeshModelFromReader(r io.Reader, cfg SolverConfig) (*mesh.MeshModel, error) {
+	return mesh.NewMeshModelFromReader(r, meshConfig(cfg))
 }
 
 // RunMesh advances a mesh until convergence or configured limits and emits checkpoints.

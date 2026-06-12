@@ -45,7 +45,11 @@ go mod tidy
 go run .
 ```
 
-On startup, the server applies `server/schema/postgres.sql`. `MESH3D_DATABASE_URL` is required. Browser-generated `.mesh` uploads and generated `.mesh` solver artifacts remain on the local filesystem.
+The server loads `server/.env` first, then overlays `server/.env.development` by default. Set `MESH3D_ENV=production` to load `server/.env.production` instead.
+
+The ML sidecar follows the same convention from `web_app/ml_service`: it loads `.env` first, then `.env.development` by default. Keep `MESH3D_ML_API_KEY` aligned between the Go server and Python sidecar.
+
+On startup, the server applies `server/internal/app/schema/postgres.sql`. `MESH3D_DATABASE_URL` is required. Browser-generated `.mesh` uploads and generated `.mesh` solver artifacts remain on the local filesystem.
 
 To inspect Postgres from the terminal, open `psql` inside the running container:
 
@@ -121,7 +125,7 @@ mux.HandleFunc("/", app.handleStatic)
 GET /
 ```
 
-The server calls `handleStatic` in `server/handlers.go`.
+The server calls `handleStatic` in `server/internal/app/static_handlers.go`.
 
 That serves files from `web_app/client`, including:
 
@@ -195,7 +199,7 @@ returns job JSON plus frame mesh text
 
 ### 4. Solver Runs
 
-The job handler calls `RunGoSolver` in `server/job_runner.go`.
+The job handler calls `RunGoSolver` in `server/internal/app/job_runner.go`.
 
 It:
 
@@ -273,6 +277,12 @@ solver creates checkpoints
 
 The browser turns uploaded point clouds into explicit `mesh-v1` vertices and springs before submitting a solve. The Go solver loads that explicit topology, then runs the mass-spring update loop until convergence or a configured limit.
 
+Future mesh-quality judging notes live in:
+
+```text
+docs/mesh-quality-judgment.md
+```
+
 Solver orchestration code lives in:
 
 ```text
@@ -288,7 +298,7 @@ server/solver/mesh/
 The server-side job runner that connects solver output to stored snapshots and bundled frame responses lives in:
 
 ```text
-server/job_runner.go
+server/internal/app/job_runner.go
 ```
 
 Default convergence rule:
