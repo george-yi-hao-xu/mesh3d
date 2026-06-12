@@ -108,7 +108,7 @@ export const MeshWarehouseDialog = observer(function MeshWarehouseDialog() {
                   <span className="mesh-warehouse-meta">{uploadMeta(upload)}</span>
                 </div>
               </div>
-              <button className="danger mesh-warehouse-delete" type="button" onClick={(event) => openDelete(event, upload)}>
+              <button className="secondary mesh-warehouse-delete" type="button" onClick={(event) => openDelete(event, upload)}>
                 x
               </button>
             </div>
