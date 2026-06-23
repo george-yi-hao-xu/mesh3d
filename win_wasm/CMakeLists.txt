@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(mesh3d LANGUAGES CXX C)
 
+include(FetchContent)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -35,20 +37,6 @@ set(PROJECT_HEADERS
 )
 
 # ============================================
-# Executable
-# ============================================
-add_executable(${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS})
-
-target_include_directories(${PROJECT_NAME} PRIVATE
-    include
-    src
-    ${CMAKE_SOURCE_DIR}/build/external
-    ${CMAKE_SOURCE_DIR}/build/external/raylib-master/examples/shapes
-    ${CMAKE_SOURCE_DIR}/build/external/raylib-master/src
-    ${CMAKE_SOURCE_DIR}/build/external/raylib-master/src/external/glfw/include
-)
-
-# ============================================
 # Platform defines (applied globally so raylib also gets them)
 # ============================================
 if(EMSCRIPTEN)
@@ -71,7 +59,36 @@ endif()
 # Disable examples to speed up build
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(build/external/raylib-master)
+FetchContent_Declare(
+    raylib
+    GIT_REPOSITORY https://github.com/raysan5/raylib.git
+    GIT_TAG 5.5
+    GIT_SHALLOW TRUE
+)
+
+FetchContent_Declare(
+    raygui
+    GIT_REPOSITORY https://github.com/raysan5/raygui.git
+    GIT_TAG master
+    GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(raylib raygui)
+
+# ============================================
+# Executable
+# ============================================
+add_executable(${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS})
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    include
+    src
+    ${raygui_SOURCE_DIR}/src
+    ${raylib_SOURCE_DIR}/examples/shapes
+    ${raylib_SOURCE_DIR}/src
+    ${raylib_SOURCE_DIR}/src/external/glfw/include
+)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
 
 # ============================================
@@ -105,7 +122,7 @@ if(EMSCRIPTEN)
 
     # Ensure shell.html exists (copy from raylib template with title replacement)
     if(NOT EXISTS "${CMAKE_SOURCE_DIR}/docs/shell.html")
-        file(READ "${CMAKE_SOURCE_DIR}/build/external/raylib-master/src/shell.html" SHELL_HTML_CONTENT)
+        file(READ "${raylib_SOURCE_DIR}/src/shell.html" SHELL_HTML_CONTENT)
         string(REPLACE "raylib web game" "3D Cloth Simulation" SHELL_HTML_CONTENT "${SHELL_HTML_CONTENT}")
         file(WRITE "${CMAKE_SOURCE_DIR}/docs/shell.html" "${SHELL_HTML_CONTENT}")
     endif()
