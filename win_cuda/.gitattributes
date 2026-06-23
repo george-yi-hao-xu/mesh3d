@@ -1,0 +1,5 @@
+* text=auto
+
+docs/**/* linguist-generated=true
+.vscode/* linguist-generated=true
+build/* linguist-generated=true

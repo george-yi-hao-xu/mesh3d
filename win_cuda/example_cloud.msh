@@ -1,0 +1,61 @@
+# Example: a cloth lying flat on the XZ plane, fixed around the edge, sagging under gravity
+# Format: x y z fixed mass
+# fixed: 1 = pinned, 0 = free
+# Y is UP in raylib. The cloth starts at y ~ 0 (flat on ground), edge is pinned.
+
+# ===== Outer edge (pinned) =====
+# Irregular boundary — not a perfect rectangle
+
+# Top edge
+-2.5  0.0 -2.0 1 1.0
+-1.5  0.0 -2.2 1 1.0
+-0.5  0.0 -1.9 1 1.0
+ 0.5  0.0 -2.1 1 1.0
+ 1.5  0.0 -2.0 1 1.0
+ 2.5  0.0 -2.3 1 1.0
+
+# Right edge
+ 2.7  0.0 -1.5 1 1.0
+ 2.4  0.0 -0.5 1 1.0
+ 2.6  0.0  0.5 1 1.0
+ 2.3  0.0  1.5 1 1.0
+ 2.5  0.0  2.0 1 1.0
+
+# Bottom edge
+ 1.5  0.0  2.2 1 1.0
+ 0.5  0.0  1.9 1 1.0
+-0.5  0.0  2.1 1 1.0
+-1.5  0.0  2.0 1 1.0
+-2.5  0.0  2.3 1 1.0
+
+# Left edge
+-2.6  0.0  1.5 1 1.0
+-2.4  0.0  0.5 1 1.0
+-2.7  0.0 -0.5 1 1.0
+-2.3  0.0 -1.5 1 1.0
+
+# ===== Inner particles (free to sag) =====
+# Scattered unevenly inside the boundary
+
+-1.8  0.0 -1.2 0 1.0
+-0.8  0.0 -1.4 0 1.0
+ 0.2  0.0 -1.1 0 1.0
+ 1.2  0.0 -1.3 0 1.0
+
+-1.6  0.0 -0.3 0 1.0
+-0.4  0.0 -0.6 0 1.0
+ 0.6  0.0 -0.2 0 1.0
+ 1.8  0.0 -0.5 0 1.0
+
+-1.2  0.0  0.7 0 1.0
+-0.1  0.0  0.4 0 1.0
+ 0.9  0.0  0.8 0 1.0
+ 1.6  0.0  0.5 0 1.0
+
+-1.4  0.0  1.4 0 1.0
+-0.3  0.0  1.6 0 1.0
+ 0.7  0.0  1.3 0 1.0
+ 1.4  0.0  1.5 0 1.0
+
+# A heavier blob in the middle (will sag more)
+ 0.0  0.0  0.1 0 2.0
