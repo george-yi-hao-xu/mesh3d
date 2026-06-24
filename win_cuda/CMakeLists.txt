@@ -20,6 +20,7 @@ set(PROJECT_SOURCES
     src/raygui_impl.cpp
     src/SceneDraw.cpp
     src/Spring.cpp
+    src/SpringBuilder.cpp
     src/FileDialog.cpp
 )
 
@@ -35,6 +36,7 @@ set(PROJECT_HEADERS
     include/ParticleRenderer.h
     include/SceneDraw.h
     include/Spring.h
+    include/SpringBuilder.h
     include/resource_dir.h
 )
 

@@ -83,7 +83,6 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
 
     if (!app.hasStarted) {
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Start Simulation")) {
-            RebuildMeshTimed(app, cloth);
             app.hasStarted = true;
             app.isRunning = true;
         }
