@@ -13,10 +13,218 @@
 #include <random>
 #include <algorithm>
 #include <iomanip>
+#include <unordered_map>
 
 const float HEIGHT = 0.0f;
 
 namespace mesh3d {
+    namespace {
+        // 记录粒子a b的数组下标
+        struct SpringCandidate {
+            size_t a = 0;
+            size_t b = 0;
+            float distance = 0.0f;
+        };
+
+        struct SpringBuildProfile {
+            double gridBuildMs = 0.0;
+            double candidateSearchMs = 0.0;
+            double candidateBucketMs = 0.0;
+            double shuffleMs = 0.0;
+            double connectMs = 0.0;
+            size_t candidateCount = 0;
+            size_t springCount = 0;
+        };
+
+        struct GridCell {
+            int x = 0;
+            int y = 0;
+            int z = 0;
+
+            bool operator==(const GridCell& other) const {
+                return x == other.x && y == other.y && z == other.z;
+            }
+        };
+
+        // define hash
+        struct GridCellHash {
+            size_t operator()(const GridCell& cell) const {
+                size_t h = 1469598103934665603ull;
+                auto mix = [&h](int value) {
+                    h ^= static_cast<size_t>(value);
+                    h *= 1099511628211ull;
+                };
+                mix(cell.x);
+                mix(cell.y);
+                mix(cell.z);
+                return h;
+            }
+        };
+
+        GridCell PositionToCell(const Vector3& position, float cellSize) {
+            return {
+                static_cast<int>(std::floor(position.x / cellSize)),
+                static_cast<int>(std::floor(position.y / cellSize)),
+                static_cast<int>(std::floor(position.z / cellSize))
+            };
+        }
+
+        std::vector<SpringCandidate> BuildSpringCandidatesSpatialGrid(
+            const std::vector<Particle>& particles,
+            float maxDist,
+            SpringBuildProfile* profile = nullptr
+        ) {
+            std::vector<SpringCandidate> candidates;
+            if (particles.size() < 2 || maxDist <= 0.0f) {
+                return candidates;
+            }
+
+            const float maxDistSq = maxDist * maxDist;
+            const float cellSize = maxDist * 0.5f;
+            const int neighborRange = static_cast<int>(std::ceil(maxDist / cellSize));
+
+            // record
+            std::unordered_map<GridCell, std::vector<size_t>, GridCellHash> grid;
+            grid.reserve(particles.size());
+
+            const double gridStart = GetTime();
+            for (size_t i = 0; i < particles.size(); ++i) {
+                grid[PositionToCell(particles[i].position, cellSize)].push_back(i);
+            }
+            if (profile != nullptr) {
+                profile->gridBuildMs = (GetTime() - gridStart) * 1000.0;
+            }
+
+            const double searchStart = GetTime();
+            for (size_t i = 0; i < particles.size(); ++i) {
+                const GridCell baseCell = PositionToCell(particles[i].position, cellSize);
+
+                for (int dz = -neighborRange; dz <= neighborRange; ++dz) {
+                    for (int dy = -neighborRange; dy <= neighborRange; ++dy) {
+                        for (int dx = -neighborRange; dx <= neighborRange; ++dx) {
+                            const GridCell neighborCell = { baseCell.x + dx, baseCell.y + dy, baseCell.z + dz };
+                            auto found = grid.find(neighborCell);
+                            if (found == grid.end()) {
+                                continue;
+                            }
+
+                            for (size_t j : found->second) {
+                                if (j <= i) {
+                                    continue;
+                                }
+
+                                const float diffX = particles[i].position.x - particles[j].position.x;
+                                const float diffY = particles[i].position.y - particles[j].position.y;
+                                const float diffZ = particles[i].position.z - particles[j].position.z;
+                                const float distSq = diffX * diffX + diffY * diffY + diffZ * diffZ;
+
+                                if (distSq <= maxDistSq && distSq > 0.00000001f) {
+                                    candidates.push_back({ i, j, std::sqrt(distSq) });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (profile != nullptr) {
+                profile->candidateSearchMs = (GetTime() - searchStart) * 1000.0;
+                profile->candidateCount = candidates.size();
+            }
+
+            return candidates;
+        }
+
+        using Candidate = std::pair<size_t, float>;
+        using CandidateList = std::vector<Candidate>;
+
+        std::vector<CandidateList> BuildLimitedSpringCandidatesSpatialGrid(
+            const std::vector<Particle>& particles,
+            float maxDist,
+            int maxPerParticle,
+            SpringBuildProfile* profile = nullptr
+        ) {
+            std::vector<CandidateList> candidates(particles.size());
+            if (particles.size() < 2 || maxDist <= 0.0f || maxPerParticle <= 0) {
+                return candidates;
+            }
+
+            const float maxDistSq = maxDist * maxDist;
+            const float cellSize = maxDist * 0.5f;
+            const int neighborRange = static_cast<int>(std::ceil(maxDist / cellSize));
+            // Keep more candidates than the final spring limit so shuffle/probability
+            // still has room to vary topology, but avoid storing every nearby pair.
+            const size_t perParticleLimit = static_cast<size_t>(std::max(1, maxPerParticle * 8));
+            std::unordered_map<GridCell, std::vector<size_t>, GridCellHash> grid;
+            grid.reserve(particles.size());
+
+            const double gridStart = GetTime();
+            for (size_t i = 0; i < particles.size(); ++i) {
+                grid[PositionToCell(particles[i].position, cellSize)].push_back(i);
+            }
+            if (profile != nullptr) {
+                profile->gridBuildMs = (GetTime() - gridStart) * 1000.0;
+            }
+
+            const double searchStart = GetTime();
+            for (size_t i = 0; i < particles.size(); ++i) {
+                const GridCell baseCell = PositionToCell(particles[i].position, cellSize);
+                CandidateList localCandidates;
+
+                for (int dz = -neighborRange; dz <= neighborRange; ++dz) {
+                    for (int dy = -neighborRange; dy <= neighborRange; ++dy) {
+                        for (int dx = -neighborRange; dx <= neighborRange; ++dx) {
+                            const GridCell neighborCell = { baseCell.x + dx, baseCell.y + dy, baseCell.z + dz };
+                            auto found = grid.find(neighborCell);
+                            if (found == grid.end()) {
+                                continue;
+                            }
+
+                            for (size_t j : found->second) {
+                                if (j <= i) {
+                                    continue;
+                                }
+
+                                const float diffX = particles[i].position.x - particles[j].position.x;
+                                const float diffY = particles[i].position.y - particles[j].position.y;
+                                const float diffZ = particles[i].position.z - particles[j].position.z;
+                                const float distSq = diffX * diffX + diffY * diffY + diffZ * diffZ;
+
+                                if (distSq <= maxDistSq && distSq > 0.00000001f) {
+                                    localCandidates.push_back({ j, std::sqrt(distSq) });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (localCandidates.size() > perParticleLimit) {
+                    // nth_element partitions in linear time on average: after it runs,
+                    // the first perParticleLimit entries are the nearest candidates,
+                    // but they are not fully sorted. Full sorting is unnecessary here.
+                    std::nth_element(
+                        localCandidates.begin(),
+                        localCandidates.begin() + static_cast<std::ptrdiff_t>(perParticleLimit),
+                        localCandidates.end(),
+                        [](const Candidate& a, const Candidate& b) {
+                            return a.second < b.second;
+                        }
+                    );
+                    localCandidates.resize(perParticleLimit);
+                }
+
+                if (profile != nullptr) {
+                    profile->candidateCount += localCandidates.size();
+                }
+                candidates[i] = std::move(localCandidates);
+            }
+            if (profile != nullptr) {
+                profile->candidateSearchMs = (GetTime() - searchStart) * 1000.0;
+            }
+
+            return candidates;
+        }
+    }
+
     Config LoadMeshConfig(const std::string& filename) {
         Config config;
         std::ifstream file(filename);
@@ -111,114 +319,60 @@ namespace mesh3d {
         return loaded;
     }
 
-    // ===================================================================
-    // GenerateRandomSprings: 基于种子的随机弹簧生成算法
-    //
-    // 核心思想：我们不知道不规则点云里哪些点该连起来，所以让程序
-    // 根据距离阈值 + 随机概率来自动决定连接关系。
-    //
-    // 参数说明：
-    //   seed          — 随机种子。同样的种子 -> 同样的连接拓扑（可复现）
-    //   maxDist       — 距离阈值。两个粒子离得太远就不考虑连弹簧
-    //   maxPerParticle— 每个粒子最多连几根弹簧（防止某个点连太多）
-    //   prob          — 连接概率。即使距离够近，也只有 prob 概率会真的连
-    // ===================================================================
     void Mesh::GenerateRandomSprings(unsigned int seed, float maxDist, int maxPerParticle, float prob) {
-        // 类型别名：让后面代码更易读
-        // Candidate = 一个候选对 {对方粒子编号, 距离}
-        using Candidate = std::pair<size_t, float>;
-        // CandidateList = 某个粒子的所有候选列表
-        using CandidateList = std::vector<Candidate>;
-        // 粒子太少，连不起来，直接返回
         if (particles.size() < 2) return;
 
-        size_t n = particles.size();
-
-        // ---------------------------------------------------------------
-        // Step 1: 统计每个粒子已经连了多少根弹簧
-        // connectionCount[i] = 粒子 i 当前的弹簧数量
-        // 初始都是 0
-        // ---------------------------------------------------------------
+        const size_t n = particles.size();
         std::vector<int> connectionCount(n, 0);
+        SpringBuildProfile profile;
 
-        // ---------------------------------------------------------------
-        // Step 2: 找出所有"候选"弹簧对
-        //
-        // 对于每一对粒子 (i, j)，只算一次（j > i，避免重复）。
-        // 如果它们的距离 <= maxDist，就把 j 加入 i 的候选列表。
-        //
-        // candidates[i] 是一个列表，里面存的是所有和粒子 i 距离够近、
-        // 可以考虑连弹簧的其他粒子编号。
-        // ---------------------------------------------------------------
-        std::vector<CandidateList> candidates(n);
-        for (size_t i = 0; i < n; ++i) {
-            for (size_t j = i + 1; j < n; ++j) {
-                // 计算粒子 i 和 j 的欧几里得距离
-                float dx = particles[i].position.x - particles[j].position.x;
-                float dy = particles[i].position.y - particles[j].position.y;
-                float dz = particles[i].position.z - particles[j].position.z;
-                float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        // This returns already-bucketed per-particle candidate lists, capped to
+        // nearby candidates only, so there is no large global candidate vector to split.
+        std::vector<CandidateList> candidates = BuildLimitedSpringCandidatesSpatialGrid(particles, maxDist, maxPerParticle, &profile);
+        profile.candidateBucketMs = 0.0;
 
-                // 距离在阈值内，且不是同一个点（dist > 0），就加入候选
-                if (dist <= maxDist && dist > 0.0001f) {
-                    candidates[i].push_back({ j, dist });
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------
-        // Step 3: 用种子打乱每个粒子的候选顺序
-        //
-        // 为什么要打乱？
-        // 如果不打乱，程序总是按粒子编号从小到大尝试连接，
-        // 那么编号小的粒子会优先占满 maxPerParticle 的名额，
-        // 导致编号大的粒子几乎连不上。这会让连接分布不均匀。
-        //
-        // 每个粒子用不同的种子 (seed + i) 打乱，保证结果确定但又多样。
-        // ---------------------------------------------------------------
+        // Shuffle per-particle candidates deterministically so lower indices do not
+        // always consume maxPerParticle connection slots first.
+        const double shuffleStart = GetTime();
         for (size_t i = 0; i < n; ++i) {
             std::mt19937 rng(static_cast<unsigned int>(seed + i));
             std::shuffle(candidates[i].begin(), candidates[i].end(), rng);
         }
+        profile.shuffleMs = (GetTime() - shuffleStart) * 1000.0;
 
-        // ---------------------------------------------------------------
-        // Step 4: 准备随机数生成器，用于"概率判定"
-        //
-        // dist01 会生成 [0.0, 1.0] 之间的均匀随机小数。
-        // 如果生成的数 <= prob，就建立连接。
-        // 例如 prob = 0.8，意味着 80% 的候选对会被连接。
-        // ---------------------------------------------------------------
         std::mt19937 probRng(seed);
         std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
 
-        // ---------------------------------------------------------------
-        // Step 5: 遍历所有候选，决定是否建立弹簧
-        //
-        // 规则：
-        //   1. 如果 i 或 j 已经连满了（>= maxPerParticle），跳过
-        //   2. 抽一个随机数，如果 <= prob，就连上
-        //   3. 连上后，i 和 j 的 connectionCount 各 +1
-        //
-        // 注意：这里用的是 candidates[i] 里的 j，而 j > i，
-        // 所以同一对粒子不会被处理两次。
-        // ---------------------------------------------------------------
+        // Convert candidates into springs while respecting probability and connection limits.
+        const double connectStart = GetTime();
         for (size_t i = 0; i < n; ++i) {
             for (const auto& cand : candidates[i]) {
-                size_t j = cand.first;  // cand = {粒子编号, 距离}
+                size_t j = cand.first;
 
-                // 任意一方已经连满了，就不连了
-                if (connectionCount[i] >= maxPerParticle || connectionCount[j] >= maxPerParticle)
+                if (connectionCount[i] >= maxPerParticle || connectionCount[j] >= maxPerParticle) {
                     continue;
+                }
 
-                // 概率判定：抽一个 0~1 的随机数，看运气
                 if (dist01(probRng) <= prob) {
-                    // 创建弹簧，连接粒子 i 和 j，劲度系数用当前的 springStiffness
                     springs.emplace_back(&particles[i], &particles[j], springStiffness);
                     connectionCount[i]++;
                     connectionCount[j]++;
                 }
             }
         }
+        profile.connectMs = (GetTime() - connectStart) * 1000.0;
+        profile.springCount = springs.size();
+
+        std::cout << std::fixed << std::setprecision(2)
+            << "Spring build profile: "
+            << "grid=" << profile.gridBuildMs << "ms, "
+            << "search=" << profile.candidateSearchMs << "ms, "
+            << "bucket=" << profile.candidateBucketMs << "ms, "
+            << "shuffle=" << profile.shuffleMs << "ms, "
+            << "connect=" << profile.connectMs << "ms, "
+            << "candidates=" << profile.candidateCount << ", "
+            << "springs=" << profile.springCount
+            << std::endl;
     }
 
     void Mesh::BuildFromPointCloud(const Config& c, const char* ptFileName) {
@@ -280,6 +434,57 @@ namespace mesh3d {
         }
 
         return true;
+    }
+
+    SpringStats Mesh::ComputeSpringStats() const {
+        SpringStats stats;
+        if (springs.empty()) {
+            return stats;
+        }
+
+        double lengthSum = 0.0;
+        double stretchSum = 0.0;
+
+        for (const auto& spring : springs) {
+            const Vector3& a = spring.pA->position;
+            const Vector3& b = spring.pB->position;
+            const double dx = static_cast<double>(b.x) - a.x;
+            const double dy = static_cast<double>(b.y) - a.y;
+            const double dz = static_cast<double>(b.z) - a.z;
+            const double length = std::sqrt(dx * dx + dy * dy + dz * dz);
+            const double stretch = length - spring.restLength;
+
+            lengthSum += length;
+            stretchSum += stretch;
+        }
+
+        const double count = static_cast<double>(springs.size());
+        const double lengthMean = lengthSum / count;
+        const double stretchMean = stretchSum / count;
+
+        double lengthVarianceSum = 0.0;
+        double stretchVarianceSum = 0.0;
+
+        for (const auto& spring : springs) {
+            const Vector3& a = spring.pA->position;
+            const Vector3& b = spring.pB->position;
+            const double dx = static_cast<double>(b.x) - a.x;
+            const double dy = static_cast<double>(b.y) - a.y;
+            const double dz = static_cast<double>(b.z) - a.z;
+            const double length = std::sqrt(dx * dx + dy * dy + dz * dz);
+            const double stretch = length - spring.restLength;
+            const double lengthDelta = length - lengthMean;
+            const double stretchDelta = stretch - stretchMean;
+
+            lengthVarianceSum += lengthDelta * lengthDelta;
+            stretchVarianceSum += stretchDelta * stretchDelta;
+        }
+
+        stats.lengthMean = static_cast<float>(lengthMean);
+        stats.lengthVariance = static_cast<float>(lengthVarianceSum / count);
+        stats.stretchMean = static_cast<float>(stretchMean);
+        stats.stretchVariance = static_cast<float>(stretchVarianceSum / count);
+        return stats;
     }
 
     void Mesh::Draw() {

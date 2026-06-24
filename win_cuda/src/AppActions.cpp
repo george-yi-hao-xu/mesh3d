@@ -2,6 +2,12 @@
 
 #include "raylib.h"
 
+void RebuildMeshTimed(AppState& app, mesh3d::Mesh& cloth) {
+    double start = GetTime();
+    cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+    app.lastMeshBuildMs = static_cast<float>((GetTime() - start) * 1000.0);
+}
+
 void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
     if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
         if (!app.isRunning) {
@@ -13,7 +19,7 @@ void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
     }
 
     if (IsKeyPressed(KEY_R)) {
-        cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+        RebuildMeshTimed(app, cloth);
         app.msg = "Restarted!";
         app.isRunning = false;
         app.hasStarted = false;

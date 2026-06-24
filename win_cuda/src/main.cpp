@@ -21,7 +21,9 @@ int main() {
         CAMERA_PERSPECTIVE
     };
 
+    double initialBuildStart = GetTime();
     mesh3d::Mesh cloth(app.currConfig, app.ptFileName);
+    app.lastMeshBuildMs = static_cast<float>((GetTime() - initialBuildStart) * 1000.0);
     Rectangle panelRec = { (float)APP_PANEL_X, 0, (float)APP_PANEL_WIDTH, (float)APP_SCREEN_HEIGHT };
 
     while (!WindowShouldClose()) {
@@ -47,6 +49,7 @@ int main() {
         if (now >= app.nextStatsRefreshTime) {
             app.displayedUpdateMs = app.updateMs;
             app.displayedDrawMs = app.drawMs;
+            app.displayedSpringStats = cloth.ComputeSpringStats();
             app.displayedFps = GetFPS();
             app.nextStatsRefreshTime = now + 0.25;
         }

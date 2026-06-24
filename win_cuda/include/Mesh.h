@@ -6,6 +6,13 @@
 #include <ostream>
 
 namespace mesh3d{
+    struct SpringStats {
+        float lengthMean = 0.0f;
+        float lengthVariance = 0.0f;
+        float stretchMean = 0.0f;
+        float stretchVariance = 0.0f;
+    };
+
     struct Config {
         int width = 10;
         int height = 10;
@@ -46,6 +53,7 @@ namespace mesh3d{
         bool Update(float dt);
         void Draw();
         void WritePointCloud(std::ostream& out) const;
+        SpringStats ComputeSpringStats() const;
         size_t ParticleCount() const { return particles.size(); }
         size_t SpringCount() const { return springs.size(); }
     };

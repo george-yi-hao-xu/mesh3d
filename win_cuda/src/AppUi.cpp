@@ -1,5 +1,6 @@
 #include "AppUi.h"
 
+#include "AppActions.h"
 #include "FileDialog.h"
 #include "raygui.h"
 
@@ -82,7 +83,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
 
     if (!app.hasStarted) {
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Start Simulation")) {
-            cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+            RebuildMeshTimed(app, cloth);
             app.hasStarted = true;
             app.isRunning = true;
         }
@@ -97,7 +98,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
         cy += gap;
 
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Reset Simulation")) {
-            cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+            RebuildMeshTimed(app, cloth);
             app.msg = "Restarted!";
             app.isRunning = false;
             app.hasStarted = false;
@@ -110,7 +111,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
         cy += gap;
 
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Reset Simulation")) {
-            cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+            RebuildMeshTimed(app, cloth);
             app.msg = "Restarted!";
             app.isRunning = false;
             app.hasStarted = false;
@@ -126,7 +127,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
 #if defined(_WIN32)
         if (OpenFileDialog(app.configFileName, sizeof(app.configFileName))) {
             app.currConfig = mesh3d::LoadMeshConfig(app.configFileName);
-            cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+            RebuildMeshTimed(app, cloth);
             app.msg = "Config loaded!";
             app.isRunning = false;
             app.hasStarted = false;
@@ -169,13 +170,13 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Pt Cloud", !app.hasStarted)) {
 #if defined(_WIN32)
         if (OpenFileDialog(app.ptFileName, sizeof(app.ptFileName))) {
-            cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+            RebuildMeshTimed(app, cloth);
             app.msg = "Cloud loaded!";
             app.isRunning = false;
             app.hasStarted = false;
         }
 #else
-        cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+        RebuildMeshTimed(app, cloth);
         app.msg = "Cloud loaded!";
         app.isRunning = false;
         app.hasStarted = false;
@@ -183,7 +184,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     }
 
     if (Mesh3dBtn({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Regen Springs", !app.isRunning && !app.hasStarted)) {
-        cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
+        RebuildMeshTimed(app, cloth);
         app.msg = "Mesh regenerated!";
     }
 
@@ -220,9 +221,19 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     cy += 20;
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Draw: %.2f ms", app.displayedDrawMs));
     cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Build: %.2f ms", app.lastMeshBuildMs));
+    cy += 20;
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Particles: %zu", cloth.ParticleCount()));
     cy += 20;
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Springs: %zu", cloth.SpringCount()));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Len Mean: %.4f", app.displayedSpringStats.lengthMean));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Len Var: %.4f", app.displayedSpringStats.lengthVariance));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Stretch Mean: %.4f", app.displayedSpringStats.stretchMean));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Stretch Var: %.4f", app.displayedSpringStats.stretchVariance));
 }
 
 void DrawStatusOverlay(const AppState& app) {
