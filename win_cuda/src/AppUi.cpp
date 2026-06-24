@@ -3,6 +3,7 @@
 #include "FileDialog.h"
 #include "raygui.h"
 
+#include <cstring>
 #include <ctime>
 #include <fstream>
 
@@ -17,6 +18,17 @@ void SetDefaultPointCloudFilename(char* buffer, size_t size) {
     time_t now = time(nullptr);
     struct tm* timeinfo = localtime(&now);
     strftime(buffer, size, "point_cloud_%Y%m%d_%H%M%S.msh", timeinfo);
+}
+
+const char* GetDisplayFileName(const char* path) {
+    if (path == nullptr || path[0] == '\0') {
+        return "Missing";
+    }
+
+    const char* slash = strrchr(path, '/');
+    const char* backslash = strrchr(path, '\\');
+    const char* separator = slash > backslash ? slash : backslash;
+    return separator != nullptr ? separator + 1 : path;
 }
 
 int Mesh3dBtn(Rectangle pos, const char* label, bool active = true) {
@@ -151,7 +163,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     GuiLabel({ cx, cy, cw, 18 }, "Point Cloud");
     cy += 20;
 
-    GuiLabel({ cx, cy, cw, ch }, TextFormat("File Name: %s", app.ptFileName[0] != '\0' ? app.ptFileName : "Missing"));
+    GuiLabel({ cx, cy, cw, ch }, TextFormat("File Name: %s", GetDisplayFileName(app.ptFileName)));
     cy += gap;
 
     if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Pt Cloud", !app.hasStarted)) {

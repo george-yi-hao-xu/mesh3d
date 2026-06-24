@@ -16,6 +16,7 @@ set(PROJECT_SOURCES
     src/main.cpp
     src/Mesh.cpp
     src/Particle.cpp
+    src/ParticleRenderer.cpp
     src/raygui_impl.cpp
     src/SceneDraw.cpp
     src/Spring.cpp
@@ -31,6 +32,7 @@ set(PROJECT_HEADERS
     include/Mesh.h
     include/Particle.h
     include/Particle.hpp
+    include/ParticleRenderer.h
     include/SceneDraw.h
     include/Spring.h
     include/resource_dir.h

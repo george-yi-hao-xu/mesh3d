@@ -9,8 +9,8 @@ import random
 from pathlib import Path
 
 
-DEFAULT_COUNT = 4800
-DEFAULT_OUTPUT = "random_cloud_4800.msh"
+DEFAULT_COUNT = 48000
+DEFAULT_OUTPUT = "random_cloud_48k.msh"
 DEFAULT_SEED = 42
 DEFAULT_SIZE = 16.0
 DEFAULT_JITTER = 0.18

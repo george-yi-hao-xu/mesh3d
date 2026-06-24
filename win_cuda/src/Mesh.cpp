@@ -1,5 +1,8 @@
 #include "Mesh.h"
+#include "ParticleRenderer.h"
+
 #include "raylib.h"
+#include "rlgl.h"
 #include <iostream>
 #include <future>
 #include <vector>
@@ -280,13 +283,17 @@ namespace mesh3d {
     }
 
     void Mesh::Draw() {
+        rlBegin(RL_LINES);
+        rlColor4ub(BLUE.r, BLUE.g, BLUE.b, BLUE.a);
         for (auto& spring : springs) {
-            DrawLine3D(spring.pA->position, spring.pB->position, BLUE);
+            const Vector3& a = spring.pA->position;
+            const Vector3& b = spring.pB->position;
+            rlVertex3f(a.x, a.y, a.z);
+            rlVertex3f(b.x, b.y, b.z);
         }
+        rlEnd();
 
-        for (auto& particle : particles) {
-            DrawSphereEx(particle.position, 0.1f, 4, 4, particle.isFixed ? RED : GREEN);
-        }
+        DrawParticlesInstancedOrFallback(particles);
     }
 
     void Mesh::WritePointCloud(std::ostream& out) const {
