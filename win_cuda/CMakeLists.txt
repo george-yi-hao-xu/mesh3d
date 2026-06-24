@@ -85,7 +85,10 @@ add_executable(${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS})
 
 if(MESH3D_ENABLE_CUDA)
     target_compile_definitions(${PROJECT_NAME} PRIVATE MESH3D_ENABLE_CUDA)
-    set_target_properties(${PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES 86)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        CUDA_ARCHITECTURES 86
+        OUTPUT_NAME mesh3d_cuda
+    )
 endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE

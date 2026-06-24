@@ -20,7 +20,7 @@ if errorlevel 1 goto error
 
 echo.
 echo CUDA desktop build completed successfully.
-echo Output: %BUILD_DIR%\mesh3d.exe
+echo Output: %BUILD_DIR%\mesh3d_cuda.exe
 goto end
 
 :error
