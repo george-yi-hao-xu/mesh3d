@@ -17,6 +17,10 @@ The CUDA build outputs:
 build\cuda_desktop_msvc\mesh3d_cuda.exe
 ```
 
+The CUDA desktop script configures CMake with `CMAKE_BUILD_TYPE=Release`, so the
+output should not depend on MSVC debug runtime DLLs such as `MSVCP140D.dll` or
+`ucrtbased.dll`.
+
 The normal MinGW CPU build path remains separate.
 
 ## What CUDA Accelerates Now

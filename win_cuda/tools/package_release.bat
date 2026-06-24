@@ -38,6 +38,7 @@ copy "%CUDA_EXE%" "%CUDA_DIR%\" >nul
 
 call :copy_common "%CPU_DIR%"
 call :copy_common "%CUDA_DIR%"
+call :copy_mingw_runtime "%CPU_DIR%"
 
 call :write_cpu_readme "%CPU_DIR%\README.txt"
 call :write_cuda_readme "%CUDA_DIR%\README.txt"
@@ -45,7 +46,8 @@ call :write_cuda_readme "%CUDA_DIR%\README.txt"
 echo CPU package:  %CPU_DIR%
 echo CUDA package: %CUDA_DIR%
 echo.
-echo Package folders created. DLL dependency copying is not handled yet.
+echo Package folders created.
+echo Run tools\check_release_deps.bat to inspect DLL dependencies.
 goto end
 
 :copy_common
@@ -54,6 +56,29 @@ copy "default_config.txt" "%TARGET_DIR%\" >nul
 copy "example_cloud.msh" "%TARGET_DIR%\" >nul
 copy "example_cloud_2.msh" "%TARGET_DIR%\" >nul
 if exist "resources" xcopy "resources" "%TARGET_DIR%\resources\" /e /i /y >nul
+exit /b 0
+
+:copy_mingw_runtime
+set "TARGET_DIR=%~1"
+call :copy_path_dll "libgcc_s_seh-1.dll" "%TARGET_DIR%"
+if errorlevel 1 exit /b 1
+call :copy_path_dll "libstdc++-6.dll" "%TARGET_DIR%"
+if errorlevel 1 exit /b 1
+exit /b 0
+
+:copy_path_dll
+set "DLL_NAME=%~1"
+set "TARGET_DIR=%~2"
+set "DLL_PATH="
+for /f "delims=" %%A in ('where "%DLL_NAME%" 2^>nul') do (
+    if not defined DLL_PATH set "DLL_PATH=%%A"
+)
+if not defined DLL_PATH (
+    echo Missing runtime DLL in PATH: %DLL_NAME%
+    echo Add MinGW bin to PATH, for example C:\mingw64\bin.
+    exit /b 1
+)
+copy "%DLL_PATH%" "%TARGET_DIR%\" >nul
 exit /b 0
 
 :write_cpu_readme
@@ -67,13 +92,16 @@ echo This version is recommended for most users.
 echo It does not require an NVIDIA GPU.
 echo.
 echo Included files:
+echo   libgcc_s_seh-1.dll
+echo   libstdc++-6.dll
 echo   default_config.txt
 echo   example_cloud.msh
 echo   example_cloud_2.msh
 echo   resources\
 echo.
-echo If the app does not start, install the latest Microsoft Visual C++ Redistributable
-echo or contact the creator with a screenshot of the error message.
+echo If the app does not start, contact the creator with a screenshot of the error message.
+echo.
+echo If Windows reports a missing DLL, send the exact DLL name to the creator.
 ) > "%~1"
 exit /b 0
 
@@ -98,6 +126,7 @@ echo   example_cloud_2.msh
 echo   resources\
 echo.
 echo If the app reports missing DLLs, send the exact DLL name to the creator.
+echo For CUDA users, updating the NVIDIA driver is recommended.
 ) > "%~1"
 exit /b 0
 

@@ -12,7 +12,7 @@ set "VS_CMAKE=C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\
 
 if exist "%VS_CMAKE%" set "CMAKE_EXE=%VS_CMAKE%"
 
-"%CMAKE_EXE%" -B "%BUILD_DIR%" -S . -G "NMake Makefiles" -DMESH3D_ENABLE_CUDA=ON
+"%CMAKE_EXE%" -B "%BUILD_DIR%" -S . -G "NMake Makefiles" -DMESH3D_ENABLE_CUDA=ON -DCMAKE_BUILD_TYPE=Release
 if errorlevel 1 goto error
 
 "%CMAKE_EXE%" --build "%BUILD_DIR%"

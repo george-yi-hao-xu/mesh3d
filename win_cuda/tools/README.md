@@ -76,8 +76,8 @@ tools\build_cuda_desktop.bat
 This uses `build\cuda_desktop_msvc` and does not overwrite the normal MinGW
 build in `build\desktop`. The script prefers the Visual Studio bundled CMake so
 the MSVC/NMake generator does not accidentally use the MinGW CMake first in
-PATH. At this stage the flag only enables the CUDA backend skeleton; the spring
-builder still uses the CPU implementation.
+PATH. It configures a Release build for distribution-friendly runtime
+dependencies.
 
 Run this command from the project root. Do not `cd tools` first, because the
 script passes `-S .` to CMake and expects `.` to contain the main
