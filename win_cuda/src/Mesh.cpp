@@ -285,7 +285,7 @@ namespace mesh3d {
         }
 
         for (auto& particle : particles) {
-            DrawSphere(particle.position, 0.1f, particle.isFixed ? RED : GREEN);
+            DrawSphereEx(particle.position, 0.1f, 4, 4, particle.isFixed ? RED : GREEN);
         }
     }
 

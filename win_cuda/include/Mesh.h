@@ -46,5 +46,7 @@ namespace mesh3d{
         bool Update(float dt);
         void Draw();
         void WritePointCloud(std::ostream& out) const;
+        size_t ParticleCount() const { return particles.size(); }
+        size_t SpringCount() const { return springs.size(); }
     };
 } // namespace mesh3d

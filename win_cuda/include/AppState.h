@@ -13,6 +13,12 @@ constexpr int APP_PANEL_X = APP_SCREEN_WIDTH - APP_PANEL_WIDTH;
 struct AppState {
     mesh3d::Config currConfig;
     float animationSpeed = 1.0f;
+    float updateMs = 0.0f;
+    float drawMs = 0.0f;
+    float displayedUpdateMs = 0.0f;
+    float displayedDrawMs = 0.0f;
+    int displayedFps = 0;
+    double nextStatsRefreshTime = 0.0;
     std::string msg = "Press r to restart simulation";
 
     bool isRunning = false;

@@ -202,7 +202,15 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     Mesh3dSlider({ cx, cy, cw, ch }, "Conn Prob", TextFormat("%.2f", app.currConfig.springConnectProb), &app.currConfig.springConnectProb, 0.0f, 1.0f, !app.hasStarted);
     cy += gap;
 
-    GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %d", GetFPS()));
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %d", app.displayedFps));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Update: %.2f ms", app.displayedUpdateMs));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Draw: %.2f ms", app.displayedDrawMs));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Particles: %zu", cloth.ParticleCount()));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Springs: %zu", cloth.SpringCount()));
 }
 
 void DrawStatusOverlay(const AppState& app) {

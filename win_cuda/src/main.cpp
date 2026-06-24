@@ -27,17 +27,29 @@ int main() {
     while (!WindowShouldClose()) {
         HandleKeyboardShortcuts(app, cloth);
         UpdateCameraControls(camera, panelRec, GetFrameTime());
+
+        double updateStart = GetTime();
         UpdateSimulation(app, cloth);
+        app.updateMs = static_cast<float>((GetTime() - updateStart) * 1000.0);
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
+        double drawStart = GetTime();
         BeginMode3D(camera);
         DrawCoordSystem();
         cloth.Draw();
         EndMode3D();
+        app.drawMs = static_cast<float>((GetTime() - drawStart) * 1000.0);
 
         DrawAxisLabels(camera);
+        double now = GetTime();
+        if (now >= app.nextStatsRefreshTime) {
+            app.displayedUpdateMs = app.updateMs;
+            app.displayedDrawMs = app.drawMs;
+            app.displayedFps = GetFPS();
+            app.nextStatsRefreshTime = now + 0.25;
+        }
         DrawAppUi(app, cloth);
 
         EndDrawing();
