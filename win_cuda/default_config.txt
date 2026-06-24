@@ -1,0 +1,12 @@
+width=31
+height=31
+spacing=0.25
+stiffness=10
+particleMass=1
+dampingFactor=1.5
+airResistanceFactor=0.01
+gravity=-9.8
+springSeed=42
+maxSpringDist=1.5
+maxSpringsPerParticle=4
+springConnectProb=0.8
