@@ -60,3 +60,25 @@ CUDA smoke test passed.
 
 If this fails, keep the full command output. The most useful lines are the first
 CMake error and any compiler name or architecture shown near it.
+
+## CUDA desktop build
+
+After the smoke test passes, use this to check whether the main desktop project
+can build with the CUDA feature flag enabled:
+
+```bat
+cd /d D:\yxu\mesh3d\win_cuda
+call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
+set "PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.3\bin;%PATH%"
+tools\build_cuda_desktop.bat
+```
+
+This uses `build\cuda_desktop_msvc` and does not overwrite the normal MinGW
+build in `build\desktop`. The script prefers the Visual Studio bundled CMake so
+the MSVC/NMake generator does not accidentally use the MinGW CMake first in
+PATH. At this stage the flag only enables the CUDA backend skeleton; the spring
+builder still uses the CPU implementation.
+
+Run this command from the project root. Do not `cd tools` first, because the
+script passes `-S .` to CMake and expects `.` to contain the main
+`CMakeLists.txt`.

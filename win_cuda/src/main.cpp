@@ -4,14 +4,22 @@
 #include "CameraControls.h"
 #include "Mesh.h"
 #include "SceneDraw.h"
+#include "SpringBuilderCuda.h"
 
 #include "raylib.h"
+
+#include <iostream>
 
 int main() {
     AppState app;
     app.currConfig = mesh3d::LoadMeshConfig(app.configFileName);
 
     InitWindow(APP_SCREEN_WIDTH, APP_SCREEN_HEIGHT, "3D Cloth Simulation");
+    std::cout << "CUDA spring builder: "
+        << (mesh3d::IsCudaSpringBuilderAvailable()
+            ? (mesh3d::RunCudaSpringBuilderProbe() ? "probe ok" : "probe failed")
+            : "disabled")
+        << std::endl;
 
     Camera camera = {
         { 15.0f, 15.0f, 15.0f },

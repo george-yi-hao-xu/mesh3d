@@ -1,4 +1,5 @@
 #include "SpringBuilder.h"
+#include "SpringBuilderCuda.h"
 
 #include "raylib.h"
 
@@ -148,7 +149,15 @@ namespace mesh3d {
 
         // This returns already-bucketed per-particle candidate lists, capped to
         // nearby candidates only, so there is no large global candidate vector to split.
-        std::vector<CandidateList> candidates = BuildLimitedSpringCandidatesSpatialGrid(particles, maxDist, maxPerParticle, &profile);
+        std::vector<CandidateList> candidates;
+#ifdef MESH3D_ENABLE_CUDA
+        const bool usedCudaCandidates = BuildLimitedSpringCandidatesCuda(particles, maxDist, maxPerParticle, candidates, &profile);
+        if (!usedCudaCandidates) {
+            candidates = BuildLimitedSpringCandidatesSpatialGrid(particles, maxDist, maxPerParticle, &profile);
+        }
+#else
+        candidates = BuildLimitedSpringCandidatesSpatialGrid(particles, maxDist, maxPerParticle, &profile);
+#endif
         profile.candidateBucketMs = 0.0;
 
         // Shuffle per-particle candidates deterministically so lower indices do not

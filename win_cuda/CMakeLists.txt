@@ -6,6 +6,8 @@ include(FetchContent)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(MESH3D_ENABLE_CUDA "Enable CUDA spring builder backend" OFF)
+
 # ============================================
 # Source files
 # ============================================
@@ -21,6 +23,7 @@ set(PROJECT_SOURCES
     src/SceneDraw.cpp
     src/Spring.cpp
     src/SpringBuilder.cpp
+    src/SpringBuilderCuda.cpp
     src/FileDialog.cpp
 )
 
@@ -37,8 +40,15 @@ set(PROJECT_HEADERS
     include/SceneDraw.h
     include/Spring.h
     include/SpringBuilder.h
+    include/SpringBuilderCuda.h
     include/resource_dir.h
 )
+
+if(MESH3D_ENABLE_CUDA)
+    enable_language(CUDA)
+    list(APPEND PROJECT_SOURCES src/SpringBuilderCudaKernels.cu)
+    list(APPEND PROJECT_HEADERS src/SpringBuilderCudaKernels.h)
+endif()
 
 # ============================================
 # Platform defines (applied globally so raylib also gets them)
@@ -72,6 +82,11 @@ FetchContent_MakeAvailable(raylib raygui)
 # Executable
 # ============================================
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS})
+
+if(MESH3D_ENABLE_CUDA)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MESH3D_ENABLE_CUDA)
+    set_target_properties(${PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES 86)
+endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     include
