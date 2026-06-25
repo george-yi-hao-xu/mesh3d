@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <ctime>
+#include <cstdio>
 #include <fstream>
 
 namespace {
@@ -32,6 +33,37 @@ const char* GetDisplayFileName(const char* path) {
     return separator != nullptr ? separator + 1 : path;
 }
 
+struct SliderInputState {
+    const char* label = nullptr;
+    bool editMode = false;
+    char text[32] = "";
+};
+
+int gSliderInputIndex = 0;
+SliderInputState gSliderInputs[16];
+
+void BeginSliderInputs() {
+    gSliderInputIndex = 0;
+}
+
+float ClampFloat(float value, float minValue, float maxValue) {
+    if (value < minValue) return minValue;
+    if (value > maxValue) return maxValue;
+    return value;
+}
+
+SliderInputState& NextSliderInput(const char* label, const char* textRight) {
+    SliderInputState& state = gSliderInputs[gSliderInputIndex++];
+    if (state.label != label) {
+        state.label = label;
+        state.editMode = false;
+        std::snprintf(state.text, sizeof(state.text), "%s", textRight);
+    } else if (!state.editMode) {
+        std::snprintf(state.text, sizeof(state.text), "%s", textRight);
+    }
+    return state;
+}
+
 int Mesh3dBtn(Rectangle pos, const char* label, bool active = true) {
     if (active) {
         return GuiButton(pos, label);
@@ -55,20 +87,44 @@ int Mesh3dSlider(
     float maxValue,
     bool active = true
 ) {
+    const float labelWidth = 86.0f;
+    const float valueWidth = 68.0f;
+    const float itemGap = 8.0f;
+    Rectangle labelPos = { pos.x, pos.y, labelWidth, pos.height };
+    Rectangle sliderPos = { pos.x + labelWidth + itemGap, pos.y, pos.width - labelWidth - valueWidth - itemGap * 2.0f, pos.height };
+    Rectangle valuePos = { pos.x + pos.width - valueWidth, pos.y, valueWidth, pos.height };
+    SliderInputState& input = NextSliderInput(textLeft, textRight);
+
     if (active) {
-        return GuiSlider(pos, textLeft, textRight, value, minValue, maxValue);
+        GuiLabel(labelPos, textLeft);
+        int result = GuiSlider(sliderPos, nullptr, nullptr, value, minValue, maxValue);
+        if (!input.editMode) {
+            std::snprintf(input.text, sizeof(input.text), "%s", textRight);
+        }
+        if (GuiValueBoxFloat(valuePos, nullptr, input.text, value, input.editMode)) {
+            input.editMode = !input.editMode;
+            if (!input.editMode) {
+                *value = ClampFloat(*value, minValue, maxValue);
+            }
+        }
+        return result;
     }
 
     GuiLock();
+    input.editMode = false;
     auto prevSliderColor = GuiGetStyle(SLIDER, BASE_COLOR_PRESSED);
     GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, ColorToInt(GRAY));
-    int result = GuiSlider(pos, textLeft, textRight, value, minValue, maxValue);
+    GuiLabel(labelPos, textLeft);
+    GuiValueBoxFloat(valuePos, nullptr, input.text, value, false);
+    int result = GuiSlider(sliderPos, nullptr, nullptr, value, minValue, maxValue);
     GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, prevSliderColor);
     GuiUnlock();
     return result;
 }
 
 void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
+    BeginSliderInputs();
+
     float cx = APP_PANEL_X + 16;
     float cw = APP_PANEL_WIDTH - 32;
     float cy = 12;

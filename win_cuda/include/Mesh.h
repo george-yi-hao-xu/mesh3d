@@ -55,6 +55,7 @@ namespace mesh3d{
         void GenerateRandomSprings(unsigned int seed, float maxDist, int maxPerParticle, float prob);
     public:
         Mesh(const Config& config, const char* ptFileName = nullptr);
+        void ApplyRuntimeConfig(const Config& config);
         bool Update(float dt);
         void Draw();
         void WritePointCloud(std::ostream& out) const;

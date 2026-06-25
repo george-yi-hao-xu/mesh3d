@@ -145,6 +145,13 @@ namespace mesh3d {
         }
     }
 
+    void Mesh::ApplyRuntimeConfig(const Config& c) {
+        springStiffness = c.stiffness;
+        dampingFactor = c.dampingFactor;
+        airResistanceFactor = c.airResistanceFactor;
+        gravity = c.gravity;
+    }
+
     bool Mesh::Update(float dt) {
         if (dt <= 0.0f) return true;
 

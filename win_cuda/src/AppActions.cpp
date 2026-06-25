@@ -83,6 +83,8 @@ void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
 }
 
 void UpdateSimulation(AppState& app, mesh3d::Mesh& cloth) {
+    cloth.ApplyRuntimeConfig(app.currConfig);
+
     if (!app.isRunning) {
         ResetSimAccumulator();
         return;
