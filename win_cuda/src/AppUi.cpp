@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <ctime>
+#include <cstdio>
 #include <fstream>
 
 namespace {
@@ -32,6 +33,37 @@ const char* GetDisplayFileName(const char* path) {
     return separator != nullptr ? separator + 1 : path;
 }
 
+struct SliderInputState {
+    const char* label = nullptr;
+    bool editMode = false;
+    char text[32] = "";
+};
+
+int gSliderInputIndex = 0;
+SliderInputState gSliderInputs[16];
+
+void BeginSliderInputs() {
+    gSliderInputIndex = 0;
+}
+
+float ClampFloat(float value, float minValue, float maxValue) {
+    if (value < minValue) return minValue;
+    if (value > maxValue) return maxValue;
+    return value;
+}
+
+SliderInputState& NextSliderInput(const char* label, const char* textRight) {
+    SliderInputState& state = gSliderInputs[gSliderInputIndex++];
+    if (state.label != label) {
+        state.label = label;
+        state.editMode = false;
+        std::snprintf(state.text, sizeof(state.text), "%s", textRight);
+    } else if (!state.editMode) {
+        std::snprintf(state.text, sizeof(state.text), "%s", textRight);
+    }
+    return state;
+}
+
 int Mesh3dBtn(Rectangle pos, const char* label, bool active = true) {
     if (active) {
         return GuiButton(pos, label);
@@ -55,20 +87,44 @@ int Mesh3dSlider(
     float maxValue,
     bool active = true
 ) {
+    const float labelWidth = 86.0f;
+    const float valueWidth = 68.0f;
+    const float itemGap = 8.0f;
+    Rectangle labelPos = { pos.x, pos.y, labelWidth, pos.height };
+    Rectangle sliderPos = { pos.x + labelWidth + itemGap, pos.y, pos.width - labelWidth - valueWidth - itemGap * 2.0f, pos.height };
+    Rectangle valuePos = { pos.x + pos.width - valueWidth, pos.y, valueWidth, pos.height };
+    SliderInputState& input = NextSliderInput(textLeft, textRight);
+
     if (active) {
-        return GuiSlider(pos, textLeft, textRight, value, minValue, maxValue);
+        GuiLabel(labelPos, textLeft);
+        int result = GuiSlider(sliderPos, nullptr, nullptr, value, minValue, maxValue);
+        if (!input.editMode) {
+            std::snprintf(input.text, sizeof(input.text), "%s", textRight);
+        }
+        if (GuiValueBoxFloat(valuePos, nullptr, input.text, value, input.editMode)) {
+            input.editMode = !input.editMode;
+            if (!input.editMode) {
+                *value = ClampFloat(*value, minValue, maxValue);
+            }
+        }
+        return result;
     }
 
     GuiLock();
+    input.editMode = false;
     auto prevSliderColor = GuiGetStyle(SLIDER, BASE_COLOR_PRESSED);
     GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, ColorToInt(GRAY));
-    int result = GuiSlider(pos, textLeft, textRight, value, minValue, maxValue);
+    GuiLabel(labelPos, textLeft);
+    GuiValueBoxFloat(valuePos, nullptr, input.text, value, false);
+    int result = GuiSlider(sliderPos, nullptr, nullptr, value, minValue, maxValue);
     GuiSetStyle(SLIDER, BASE_COLOR_PRESSED, prevSliderColor);
     GuiUnlock();
     return result;
 }
 
 void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
+    BeginSliderInputs();
+
     float cx = APP_PANEL_X + 16;
     float cw = APP_PANEL_WIDTH - 32;
     float cy = 12;
@@ -80,11 +136,14 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     const char* statusText = app.isRunning ? "Status: Running" : (app.hasStarted ? "Status: Paused (Locked)" : "Status: Ready");
     GuiLabel({ cx, cy, cw, 18 }, statusText);
     cy += 24;
+    GuiLabel({ cx, cy, cw, 18 }, TextFormat("Msg: %s", app.msg.c_str()));
+    cy += 24;
 
     if (!app.hasStarted) {
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Start Simulation")) {
             app.hasStarted = true;
             app.isRunning = true;
+            app.msg = "Simulation started";
         }
 
         cy += gap;
@@ -92,6 +151,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     } else if (app.isRunning) {
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Pause Simulation")) {
             app.isRunning = false;
+            app.msg = "Simulation paused";
         }
 
         cy += gap;
@@ -105,6 +165,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     } else {
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Resume Simulation")) {
             app.isRunning = true;
+            app.msg = "Simulation resumed";
         }
 
         cy += gap;
@@ -140,7 +201,8 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     }
     cy += gap + 8;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.2f", app.animationSpeed), &app.animationSpeed, 0.05f, 3.0f, !app.hasStarted);
+    constexpr int maxStepsPerFrame = 20;
+    Mesh3dSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.1f", app.animationSpeed), &app.animationSpeed, 0.5f, static_cast<float>(maxStepsPerFrame), !app.hasStarted);
     cy += gap;
 
     Mesh3dSlider({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", app.currConfig.stiffness), &app.currConfig.stiffness, 1.0f, 50.0f, !app.hasStarted);
@@ -233,6 +295,10 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Stretch Mean: %.4f", app.displayedSpringStats.stretchMean));
     cy += 20;
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Stretch Var: %.4f", app.displayedSpringStats.stretchVariance));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Force Mean: %.4f", app.displayedPtStats.forceValMean));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Force Var: %.4f", app.displayedPtStats.forceValVar));
 }
 
 void DrawStatusOverlay(const AppState& app) {

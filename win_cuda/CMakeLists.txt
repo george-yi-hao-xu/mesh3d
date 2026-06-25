@@ -19,7 +19,7 @@ set(PROJECT_SOURCES
     src/Mesh.cpp
     src/Particle.cpp
     src/ParticleRenderer.cpp
-    src/raygui_impl.cpp
+    src/raygui_impl.c
     src/SceneDraw.cpp
     src/Spring.cpp
     src/SpringBuilder.cpp

@@ -1,4 +1,6 @@
 {
+    "C_Cpp.default.configurationProvider": "",
+    "C_Cpp.default.configuration": "mesh3d-win-cuda",
     "workbench.colorCustomizations": {
         "minimap.background": "#00000000",
         "scrollbar.shadow": "#00000000"

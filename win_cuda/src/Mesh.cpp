@@ -145,6 +145,13 @@ namespace mesh3d {
         }
     }
 
+    void Mesh::ApplyRuntimeConfig(const Config& c) {
+        springStiffness = c.stiffness;
+        dampingFactor = c.dampingFactor;
+        airResistanceFactor = c.airResistanceFactor;
+        gravity = c.gravity;
+    }
+
     bool Mesh::Update(float dt) {
         if (dt <= 0.0f) return true;
 
@@ -176,7 +183,7 @@ namespace mesh3d {
         return true;
     }
 
-    SpringStats Mesh::ComputeSpringStats() const {
+    mesh3d::SpringStats Mesh::ComputeSpringStats() const {
         SpringStats stats;
         if (springs.empty()) {
             return stats;
@@ -224,6 +231,47 @@ namespace mesh3d {
         stats.lengthVariance = static_cast<float>(lengthVarianceSum / count);
         stats.stretchMean = static_cast<float>(stretchMean);
         stats.stretchVariance = static_cast<float>(stretchVarianceSum / count);
+        return stats;
+    }
+
+    mesh3d::PtStats Mesh::ComputePtStats() const {
+        PtStats stats;
+        if (particles.empty()) {
+            return stats;
+        }
+
+        double forceMagSum = 0.0;
+
+        for (const auto& particle : particles) {
+            const Vector3& force = particle.lastFrameNetForce;
+            const double forceMag = std::sqrt(
+                static_cast<double>(force.x) * force.x +
+                static_cast<double>(force.y) * force.y +
+                static_cast<double>(force.z) * force.z
+            );
+
+            forceMagSum += forceMag;
+        }
+
+        const double count = static_cast<double>(particles.size());
+        const double forceMagMean = forceMagSum / count;
+
+        double forceMagVarianceSum = 0.0;
+
+        for (const auto& particle : particles) {
+            const Vector3& force = particle.lastFrameNetForce;
+            const double forceMag = std::sqrt(
+                static_cast<double>(force.x) * force.x +
+                static_cast<double>(force.y) * force.y +
+                static_cast<double>(force.z) * force.z
+            );
+            const double forceMagDelta = forceMag - forceMagMean;
+
+            forceMagVarianceSum += forceMagDelta * forceMagDelta;
+        }
+
+        stats.forceValMean = static_cast<float>(forceMagMean);
+        stats.forceValVar = static_cast<float>(forceMagVarianceSum / count);
         return stats;
     }
 

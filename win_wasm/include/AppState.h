@@ -24,4 +24,10 @@ struct AppState {
     char pointCloudSaveFilename[256] = "point_cloud.msh";
     char ptFileName[256] = "example_cloud.msh";
     char configFileName[256] = "default_config.txt";
+    float lastMeshBuildMs = 0.0f;
+    float updateMs = 0.0f;
+    float drawMs = 0.0f;
+    float nextStatsRefreshTime = 0.0f;
+    float displayedUpdateMs = 0.0f;
+    float displayedDrawMs = 0.0f;
 };

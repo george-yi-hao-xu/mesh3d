@@ -58,6 +58,12 @@ int main() {
             app.displayedUpdateMs = app.updateMs;
             app.displayedDrawMs = app.drawMs;
             app.displayedSpringStats = cloth.ComputeSpringStats();
+            app.displayedPtStats = cloth.ComputePtStats();
+            if (app.isRunning && app.displayedPtStats.forceValMean <= AUTO_PAUSE_FORCE_MEAN_THRESHOLD) {
+                app.isRunning = false;
+                app.msg = "Auto-paused: force mean near zero";
+                printf("Auto-paused");
+            }
             app.displayedFps = GetFPS();
             app.nextStatsRefreshTime = now + 0.25;
         }

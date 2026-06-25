@@ -4,11 +4,11 @@
 
 #include <string>
 
-constexpr float ANIMATION_SPEED_STEP = 0.05f;
 constexpr int APP_SCREEN_WIDTH = 1280;
 constexpr int APP_SCREEN_HEIGHT = 900;
-constexpr int APP_PANEL_WIDTH = 260;
+constexpr int APP_PANEL_WIDTH = 320;
 constexpr int APP_PANEL_X = APP_SCREEN_WIDTH - APP_PANEL_WIDTH;
+constexpr float AUTO_PAUSE_FORCE_MEAN_THRESHOLD = 0.001f;
 
 struct AppState {
     mesh3d::Config currConfig;
@@ -19,6 +19,7 @@ struct AppState {
     float displayedUpdateMs = 0.0f;
     float displayedDrawMs = 0.0f;
     mesh3d::SpringStats displayedSpringStats;
+    mesh3d::PtStats displayedPtStats;
     int displayedFps = 0;
     double nextStatsRefreshTime = 0.0;
     std::string msg = "Press r to restart simulation";
