@@ -13,6 +13,11 @@ namespace mesh3d{
         float stretchVariance = 0.0f;
     };
 
+    struct PtStats {
+        float forceValMean = 0.0f;
+        float forceValVar = 0.0f;
+    };
+
     struct Config {
         int width = 10;
         int height = 10;
@@ -54,6 +59,7 @@ namespace mesh3d{
         void Draw();
         void WritePointCloud(std::ostream& out) const;
         SpringStats ComputeSpringStats() const;
+        PtStats ComputePtStats() const;
         size_t ParticleCount() const { return particles.size(); }
         size_t SpringCount() const { return springs.size(); }
     };

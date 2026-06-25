@@ -2,10 +2,21 @@
 
 #include "raylib.h"
 
+namespace {
+    constexpr int maxStepsPerFrame = 20;
+    constexpr float fixedDt = 1.0f / 120.0f;
+    float simAccumulator = 0.0f;
+
+    void ResetSimAccumulator() {
+        simAccumulator = 0.0f;
+    }
+}
+
 void RebuildMeshTimed(AppState& app, mesh3d::Mesh& cloth) {
     double start = GetTime();
     cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
     app.lastMeshBuildMs = static_cast<float>((GetTime() - start) * 1000.0);
+    ResetSimAccumulator();
 }
 
 void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
@@ -13,8 +24,11 @@ void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
         if (!app.isRunning) {
             app.hasStarted = true;
             app.isRunning = true;
+            app.msg = "Simulation resumed";
         } else {
             app.isRunning = false;
+            ResetSimAccumulator();
+            app.msg = "Simulation paused";
         }
     }
 
@@ -26,11 +40,11 @@ void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
     }
 
     if (!app.hasStarted) {
-        if (IsKeyPressed(KEY_UP)) {
-            app.animationSpeed += ANIMATION_SPEED_STEP;
+        if (IsKeyPressed(KEY_UP) && app.animationSpeed < static_cast<float>(maxStepsPerFrame)) {
+            app.animationSpeed += 0.5f;
         }
-        if (IsKeyPressed(KEY_DOWN) && app.animationSpeed > ANIMATION_SPEED_STEP) {
-            app.animationSpeed -= ANIMATION_SPEED_STEP;
+        if (IsKeyPressed(KEY_DOWN) && app.animationSpeed > 0.5f) {
+            app.animationSpeed -= 0.5f;
         }
 
         if (IsKeyPressed(KEY_M)) {
@@ -64,17 +78,32 @@ void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
 
     if (IsWindowResized() || !IsWindowFocused()) {
         app.isRunning = false;
+        ResetSimAccumulator();
     }
 }
 
 void UpdateSimulation(AppState& app, mesh3d::Mesh& cloth) {
     if (!app.isRunning) {
+        ResetSimAccumulator();
         return;
     }
 
-    float dt = GetFrameTime() * app.animationSpeed;
-    if (!cloth.Update(dt)) {
-        app.isRunning = false;
-        app.msg = "Simulation failed!";
+    simAccumulator += GetFrameTime() * app.animationSpeed;
+
+    int steps = 0;
+    while (simAccumulator >= fixedDt && steps < maxStepsPerFrame) {
+        if (!cloth.Update(fixedDt)) {
+            app.isRunning = false;
+            ResetSimAccumulator();
+            app.msg = "Simulation failed!";
+            return;
+        }
+
+        simAccumulator -= fixedDt;
+        steps++;
+    }
+
+    if (steps == maxStepsPerFrame) {
+        ResetSimAccumulator();
     }
 }

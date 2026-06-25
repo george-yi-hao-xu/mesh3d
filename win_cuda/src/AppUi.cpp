@@ -80,11 +80,14 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     const char* statusText = app.isRunning ? "Status: Running" : (app.hasStarted ? "Status: Paused (Locked)" : "Status: Ready");
     GuiLabel({ cx, cy, cw, 18 }, statusText);
     cy += 24;
+    GuiLabel({ cx, cy, cw, 18 }, TextFormat("Msg: %s", app.msg.c_str()));
+    cy += 24;
 
     if (!app.hasStarted) {
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Start Simulation")) {
             app.hasStarted = true;
             app.isRunning = true;
+            app.msg = "Simulation started";
         }
 
         cy += gap;
@@ -92,6 +95,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     } else if (app.isRunning) {
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Pause Simulation")) {
             app.isRunning = false;
+            app.msg = "Simulation paused";
         }
 
         cy += gap;
@@ -105,6 +109,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     } else {
         if (Mesh3dBtn({ cx, cy, cw, ch }, "Resume Simulation")) {
             app.isRunning = true;
+            app.msg = "Simulation resumed";
         }
 
         cy += gap;
@@ -140,7 +145,8 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     }
     cy += gap + 8;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.2f", app.animationSpeed), &app.animationSpeed, 0.05f, 3.0f, !app.hasStarted);
+    constexpr int maxStepsPerFrame = 20;
+    Mesh3dSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.1f", app.animationSpeed), &app.animationSpeed, 0.5f, static_cast<float>(maxStepsPerFrame), !app.hasStarted);
     cy += gap;
 
     Mesh3dSlider({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", app.currConfig.stiffness), &app.currConfig.stiffness, 1.0f, 50.0f, !app.hasStarted);
@@ -233,6 +239,10 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Stretch Mean: %.4f", app.displayedSpringStats.stretchMean));
     cy += 20;
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Stretch Var: %.4f", app.displayedSpringStats.stretchVariance));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Force Mean: %.4f", app.displayedPtStats.forceValMean));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Force Var: %.4f", app.displayedPtStats.forceValVar));
 }
 
 void DrawStatusOverlay(const AppState& app) {

@@ -14,5 +14,6 @@ void Particle::Update(float dt) {
     velocity = { velocity.x + acceleration.x * dt, velocity.y + acceleration.y * dt, velocity.z + acceleration.z * dt };
     position = { position.x + velocity.x * dt, position.y + velocity.y * dt, position.z + velocity.z * dt };
 
+    lastFrameNetForce = force;
     force = { 0, 0, 0 };  // Reset force for next frame
 }
