@@ -133,14 +133,22 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
 
     GuiGroupBox({ (float)(APP_PANEL_X + 8), 8, (float)(APP_PANEL_WIDTH - 16), (float)(APP_SCREEN_HEIGHT - 16) }, "Control Panel");
 
-    const char* statusText = app.isRunning ? "Status: Running" : (app.hasStarted ? "Status: Paused (Locked)" : "Status: Ready");
+    const bool controlsUnlocked = !app.hasStarted && !app.isLightningSolving;
+    const char* statusText = app.isLightningSolving ? "Status: Lightning" :
+        (app.isRunning ? "Status: Running" : (app.hasStarted ? "Status: Paused (Locked)" : "Status: Ready"));
     GuiLabel({ cx, cy, cw, 18 }, statusText);
     cy += 24;
     GuiLabel({ cx, cy, cw, 18 }, TextFormat("Msg: %s", app.msg.c_str()));
     cy += 24;
 
+
+    if (Mesh3dBtn({ cx, cy, cw, ch }, app.isLightningSolving ? "Lightning Running" : "Lightning Solve", !app.isRunning && !app.isLightningSolving)) {
+        RunLightningSolveTimed(app, cloth);
+    }
+    cy += gap;
+
     if (!app.hasStarted) {
-        if (Mesh3dBtn({ cx, cy, cw, ch }, "Start Simulation")) {
+        if (Mesh3dBtn({ cx, cy, cw, ch }, "Start Simulation", !app.isLightningSolving)) {
             app.hasStarted = true;
             app.isRunning = true;
             app.msg = "Simulation started";
@@ -183,7 +191,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     GuiLabel({ cx, cy, cw, 18 }, TextFormat("Config File: %s", app.configFileName));
     cy += gap;
 
-    if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Config", !app.hasStarted)) {
+    if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Config", controlsUnlocked)) {
 #if defined(_WIN32)
         if (OpenFileDialog(app.configFileName, sizeof(app.configFileName))) {
             app.currConfig = mesh3d::LoadMeshConfig(app.configFileName);
@@ -195,29 +203,29 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
 #endif
     }
 
-    if (Mesh3dBtn({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Save Config", !app.hasStarted)) {
+    if (Mesh3dBtn({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Save Config", controlsUnlocked)) {
         SetDefaultSaveFilename(app.saveFilename, sizeof(app.saveFilename));
         app.showSaveDialog = true;
     }
     cy += gap + 8;
 
-    constexpr int maxStepsPerFrame = 20;
-    Mesh3dSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.1f", app.animationSpeed), &app.animationSpeed, 0.5f, static_cast<float>(maxStepsPerFrame), !app.hasStarted);
+    constexpr int maxStepsPerFrame = 1000;
+    Mesh3dSlider({ cx, cy, cw, ch }, "Anim Speed", TextFormat("%.1f", app.animationSpeed), &app.animationSpeed, 0.5f, static_cast<float>(maxStepsPerFrame), controlsUnlocked);
     cy += gap;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", app.currConfig.stiffness), &app.currConfig.stiffness, 1.0f, 50.0f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Stiffness", TextFormat("%.1f", app.currConfig.stiffness), &app.currConfig.stiffness, 1.0f, 50.0f, controlsUnlocked);
     cy += gap;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Damping", TextFormat("%.2f", app.currConfig.dampingFactor), &app.currConfig.dampingFactor, 0.0f, 5.0f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Damping", TextFormat("%.2f", app.currConfig.dampingFactor), &app.currConfig.dampingFactor, 0.0f, 5.0f, controlsUnlocked);
     cy += gap;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", app.currConfig.airResistanceFactor), &app.currConfig.airResistanceFactor, 0.0f, 0.1f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Air Resist", TextFormat("%.3f", app.currConfig.airResistanceFactor), &app.currConfig.airResistanceFactor, 0.0f, 0.1f, controlsUnlocked);
     cy += gap;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Gravity", TextFormat("%.2f", app.currConfig.gravity), &app.currConfig.gravity, -20.0f, 20.0f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Gravity", TextFormat("%.3f", app.currConfig.gravity), &app.currConfig.gravity, -1.0f, 1.0f, controlsUnlocked);
     cy += gap;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Mass", TextFormat("%.2f", app.currConfig.particleMass), &app.currConfig.particleMass, 0.1f, 10.0f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Mass", TextFormat("%.2f", app.currConfig.particleMass), &app.currConfig.particleMass, 0.1f, 10.0f, controlsUnlocked);
     cy += gap;
 
     GuiLine({ cx, cy, cw, 1 }, nullptr);
@@ -228,7 +236,7 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     GuiLabel({ cx, cy, cw, ch }, TextFormat("File Name: %s", GetDisplayFileName(app.ptFileName)));
     cy += gap;
 
-    if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Pt Cloud", !app.hasStarted)) {
+    if (Mesh3dBtn({ cx, cy, cw / 2, ch }, "Load Pt Cloud", controlsUnlocked)) {
 #if defined(_WIN32)
         if (OpenFileDialog(app.ptFileName, sizeof(app.ptFileName))) {
             RebuildMeshTimed(app, cloth);
@@ -244,14 +252,16 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
 #endif
     }
 
-    if (Mesh3dBtn({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Regen Springs", !app.isRunning && !app.hasStarted)) {
+    if (Mesh3dBtn({ cx + cw / 2 + 8, cy, cw / 2 - 8, ch }, "Regen Springs", !app.isRunning && controlsUnlocked)) {
         RebuildMeshTimed(app, cloth);
         app.msg = "Mesh regenerated!";
     }
 
+
+
     cy += gap;
 
-    if (Mesh3dBtn({ cx, cy, cw, ch }, "Export Pt Cloud", !app.isRunning)) {
+    if (Mesh3dBtn({ cx, cy, cw, ch }, "Export Pt Cloud", !app.isRunning && !app.isLightningSolving)) {
         SetDefaultPointCloudFilename(app.pointCloudSaveFilename, sizeof(app.pointCloudSaveFilename));
         app.showPointCloudSaveDialog = true;
         app.isRunning = false;
@@ -261,19 +271,19 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     cy += gap;
 
     float seedFloat = static_cast<float>(app.currConfig.springSeed);
-    Mesh3dSlider({ cx, cy, cw, ch }, "Seed", TextFormat("%.0f", seedFloat), &seedFloat, 0.0f, 999.0f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Seed", TextFormat("%.0f", seedFloat), &seedFloat, 0.0f, 999.0f, controlsUnlocked);
     app.currConfig.springSeed = static_cast<unsigned int>(seedFloat);
     cy += gap;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Max Dist", TextFormat("%.2f", app.currConfig.maxSpringDist), &app.currConfig.maxSpringDist, 0.1f, 5.0f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Max Dist", TextFormat("%.2f", app.currConfig.maxSpringDist), &app.currConfig.maxSpringDist, 0.1f, 5.0f, controlsUnlocked);
     cy += gap;
 
     float maxSpringFloat = static_cast<float>(app.currConfig.maxSpringsPerParticle);
-    Mesh3dSlider({ cx, cy, cw, ch }, "Max Conn", TextFormat("%.0f", maxSpringFloat), &maxSpringFloat, 1.0f, 12.0f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Max Conn", TextFormat("%.0f", maxSpringFloat), &maxSpringFloat, 1.0f, 12.0f, controlsUnlocked);
     app.currConfig.maxSpringsPerParticle = static_cast<int>(maxSpringFloat);
     cy += gap;
 
-    Mesh3dSlider({ cx, cy, cw, ch }, "Conn Prob", TextFormat("%.2f", app.currConfig.springConnectProb), &app.currConfig.springConnectProb, 0.0f, 1.0f, !app.hasStarted);
+    Mesh3dSlider({ cx, cy, cw, ch }, "Conn Prob", TextFormat("%.2f", app.currConfig.springConnectProb), &app.currConfig.springConnectProb, 0.0f, 1.0f, controlsUnlocked);
     cy += gap;
 
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("FPS: %d", app.displayedFps));
@@ -283,6 +293,10 @@ void DrawControlPanel(AppState& app, mesh3d::Mesh& cloth) {
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Draw: %.2f ms", app.displayedDrawMs));
     cy += 20;
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Build: %.2f ms", app.lastMeshBuildMs));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("Lightning: %d / %d", app.lightningStepsRun, app.lightningMaxSteps));
+    cy += 20;
+    GuiLabel({ cx, cy, cw, 20 }, TextFormat("L Batch: %.2f ms", app.lastLightningBatchMs));
     cy += 20;
     GuiLabel({ cx, cy, cw, 20 }, TextFormat("Particles: %zu", cloth.ParticleCount()));
     cy += 20;

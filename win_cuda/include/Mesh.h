@@ -4,6 +4,7 @@
 #include "Spring.h"
 #include <string>
 #include <ostream>
+#include <utility>
 
 namespace mesh3d{
     struct SpringStats {
@@ -26,7 +27,7 @@ namespace mesh3d{
         float particleMass = 1.0f;
         float dampingFactor = 0.1f;
         float airResistanceFactor = 0.001f;
-        float gravity = 9.8f;
+        float gravity = -0.2f;
         std::string pointCloudFile = "";
         unsigned int springSeed = 42;
         float maxSpringDist = 1.5f;
@@ -47,7 +48,7 @@ namespace mesh3d{
         float springStiffness = 20.0f;
         float dampingFactor = 10.0f;
         float airResistanceFactor = 0.001f;
-        float gravity = 9.8f;
+        float gravity = -0.2f;
 
         void BuildRegularGrid(const Config& c);
         void BuildFromPointCloud(const Config& c, const char* ptFileName = nullptr);
@@ -56,6 +57,8 @@ namespace mesh3d{
     public:
         Mesh(const Config& config, const char* ptFileName = nullptr);
         void ApplyRuntimeConfig(const Config& config);
+        bool RunLightningRelaxation(const Config& config, int steps, float dt, int& stepsRun);
+        void ReplaceWithGraph(std::vector<Particle> newParticles, const std::vector<std::pair<int, int>>& bars, float stiffness);
         bool Update(float dt);
         void Draw();
         void WritePointCloud(std::ostream& out) const;

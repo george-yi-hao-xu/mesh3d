@@ -2,6 +2,8 @@
 
 #include "raylib.h"
 
+#include <algorithm>
+
 namespace {
     constexpr int maxStepsPerFrame = 20;
     constexpr float fixedDt = 1.0f / 120.0f;
@@ -12,6 +14,17 @@ namespace {
     }
 }
 
+void RunLightningSolveTimed(AppState& app, mesh3d::Mesh& cloth) {
+    app.isRunning = false;
+    app.hasStarted = false;
+    app.isLightningSolving = true;
+    app.lightningStepsRun = 0;
+    app.lastLightningBatchMs = 0.0f;
+    app.lastMeshBuildMs = 0.0f;
+    app.msg = TextFormat("Lightning solving: 0/%d steps", app.lightningMaxSteps);
+    ResetSimAccumulator();
+}
+
 void RebuildMeshTimed(AppState& app, mesh3d::Mesh& cloth) {
     double start = GetTime();
     cloth = mesh3d::Mesh(app.currConfig, app.ptFileName);
@@ -20,6 +33,10 @@ void RebuildMeshTimed(AppState& app, mesh3d::Mesh& cloth) {
 }
 
 void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
+    if (app.isLightningSolving) {
+        return;
+    }
+
     if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER)) {
         if (!app.isRunning) {
             app.hasStarted = true;
@@ -37,6 +54,10 @@ void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
         app.msg = "Restarted!";
         app.isRunning = false;
         app.hasStarted = false;
+    }
+
+    if (IsKeyPressed(KEY_L) && !app.isRunning && !app.isLightningSolving) {
+        RunLightningSolveTimed(app, cloth);
     }
 
     if (!app.hasStarted) {
@@ -69,10 +90,10 @@ void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
         }
 
         if (IsKeyPressed(KEY_G)) {
-            app.currConfig.gravity += 0.5f;
+            app.currConfig.gravity += 0.001f;
         }
         if (IsKeyPressed(KEY_F)) {
-            app.currConfig.gravity -= 0.5f;
+            app.currConfig.gravity -= 0.001f;
         }
     }
 
@@ -84,6 +105,45 @@ void HandleKeyboardShortcuts(AppState& app, mesh3d::Mesh& cloth) {
 
 void UpdateSimulation(AppState& app, mesh3d::Mesh& cloth) {
     cloth.ApplyRuntimeConfig(app.currConfig);
+
+    if (app.isLightningSolving) {
+        const int remainingSteps = app.lightningMaxSteps - app.lightningStepsRun;
+        if (remainingSteps <= 0) {
+            app.isLightningSolving = false;
+            app.msg = TextFormat("Lightning reached max steps: %d", app.lightningStepsRun);
+            ResetSimAccumulator();
+            return;
+        }
+
+        const int batchSteps = std::min(app.lightningBatchSteps, remainingSteps);
+        int stepsRun = 0;
+        const double start = GetTime();
+        const bool ok = cloth.RunLightningRelaxation(app.currConfig, batchSteps, fixedDt, stepsRun);
+        const float batchMs = static_cast<float>((GetTime() - start) * 1000.0);
+        app.lastLightningBatchMs = batchMs;
+        app.lastMeshBuildMs += batchMs;
+
+        if (!ok) {
+            app.isLightningSolving = false;
+            app.msg = "Lightning solve failed or CUDA unavailable";
+            ResetSimAccumulator();
+            return;
+        }
+
+        app.lightningStepsRun += stepsRun;
+        app.msg = TextFormat("Lightning solving: %d/%d steps", app.lightningStepsRun, app.lightningMaxSteps);
+
+        if (stepsRun < batchSteps) {
+            app.isLightningSolving = false;
+            app.msg = TextFormat("Lightning converged: %d/%d steps", app.lightningStepsRun, app.lightningMaxSteps);
+        } else if (app.lightningStepsRun >= app.lightningMaxSteps) {
+            app.isLightningSolving = false;
+            app.msg = TextFormat("Lightning reached max steps: %d", app.lightningStepsRun);
+        }
+
+        ResetSimAccumulator();
+        return;
+    }
 
     if (!app.isRunning) {
         ResetSimAccumulator();

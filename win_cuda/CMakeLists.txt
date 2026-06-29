@@ -25,6 +25,7 @@ set(PROJECT_SOURCES
     src/SpringBuilder.cpp
     src/SpringBuilderCuda.cpp
     src/FileDialog.cpp
+    src/lightning_solver/LightningSolver.cpp
 )
 
 set(PROJECT_HEADERS
@@ -42,12 +43,15 @@ set(PROJECT_HEADERS
     include/SpringBuilder.h
     include/SpringBuilderCuda.h
     include/resource_dir.h
+    include/lightning_solver/LightningSolver.h
 )
 
 if(MESH3D_ENABLE_CUDA)
     enable_language(CUDA)
     list(APPEND PROJECT_SOURCES src/SpringBuilderCudaKernels.cu)
+    list(APPEND PROJECT_SOURCES src/lightning_solver/LightningSolverCuda.cu)
     list(APPEND PROJECT_HEADERS src/SpringBuilderCudaKernels.h)
+    list(APPEND PROJECT_HEADERS src/lightning_solver/LightningSolverInternal.h)
 endif()
 
 # ============================================

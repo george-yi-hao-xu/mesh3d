@@ -5,7 +5,7 @@
 #include <string>
 
 constexpr int APP_SCREEN_WIDTH = 1280;
-constexpr int APP_SCREEN_HEIGHT = 900;
+constexpr int APP_SCREEN_HEIGHT = 1280;
 constexpr int APP_PANEL_WIDTH = 320;
 constexpr int APP_PANEL_X = APP_SCREEN_WIDTH - APP_PANEL_WIDTH;
 constexpr float AUTO_PAUSE_FORCE_MEAN_THRESHOLD = 0.001f;
@@ -26,6 +26,11 @@ struct AppState {
 
     bool isRunning = false;
     bool hasStarted = false;
+    bool isLightningSolving = false;
+    int lightningStepsRun = 0;
+    int lightningMaxSteps = 50000;
+    int lightningBatchSteps = 500;
+    float lastLightningBatchMs = 0.0f;
     bool showSaveDialog = false;
     bool showPointCloudSaveDialog = false;
 

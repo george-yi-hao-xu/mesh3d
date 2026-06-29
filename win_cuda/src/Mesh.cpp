@@ -1,6 +1,7 @@
 #include "Mesh.h"
 #include "ParticleRenderer.h"
 #include "SpringBuilder.h"
+#include "lightning_solver/LightningSolverInternal.h"
 
 #include "raylib.h"
 #include "rlgl.h"
@@ -13,6 +14,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
+#include <unordered_map>
 
 const float HEIGHT = 0.0f;
 
@@ -150,6 +152,110 @@ namespace mesh3d {
         dampingFactor = c.dampingFactor;
         airResistanceFactor = c.airResistanceFactor;
         gravity = c.gravity;
+    }
+
+    bool Mesh::RunLightningRelaxation(const Config& c, int steps, float dt, int& stepsRun) {
+        stepsRun = 0;
+        if (particles.empty() || springs.empty() || steps <= 0 || dt <= 0.0f) {
+            return false;
+        }
+
+        std::unordered_map<const Particle*, int> particleIndices;
+        particleIndices.reserve(particles.size());
+        for (size_t i = 0; i < particles.size(); ++i) {
+            particleIndices[&particles[i]] = static_cast<int>(i);
+        }
+
+        struct SpringEdge {
+            int a = -1;
+            int b = -1;
+            float restLength = 0.0f;
+        };
+        std::vector<SpringEdge> springEdges;
+        springEdges.reserve(springs.size());
+        std::vector<int> degree(particles.size(), 0);
+        int maxDegree = 0;
+
+        for (const Spring& spring : springs) {
+            const auto foundA = particleIndices.find(spring.pA);
+            const auto foundB = particleIndices.find(spring.pB);
+            if (foundA == particleIndices.end() || foundB == particleIndices.end()) {
+                continue;
+            }
+
+            const int a = foundA->second;
+            const int b = foundB->second;
+            if (a == b) {
+                continue;
+            }
+
+            springEdges.push_back({ a, b, spring.restLength });
+            degree[static_cast<size_t>(a)]++;
+            degree[static_cast<size_t>(b)]++;
+            maxDegree = std::max(maxDegree, std::max(degree[static_cast<size_t>(a)], degree[static_cast<size_t>(b)]));
+        }
+
+        if (springEdges.empty() || maxDegree <= 0) {
+            return false;
+        }
+
+        const int maxNeighbors = std::max(std::max(1, c.maxSpringsPerParticle), maxDegree);
+        std::vector<lightning::DirectedNeighbor> neighbors(
+            particles.size() * static_cast<size_t>(maxNeighbors),
+            lightning::DirectedNeighbor{}
+        );
+        std::vector<int> neighborCounts(particles.size(), 0);
+
+        for (const SpringEdge& edge : springEdges) {
+            const int a = edge.a;
+            const int b = edge.b;
+            const int countA = neighborCounts[static_cast<size_t>(a)];
+            const int countB = neighborCounts[static_cast<size_t>(b)];
+            if (countA < maxNeighbors) {
+                neighbors[static_cast<size_t>(a) * maxNeighbors + countA] = { b, edge.restLength };
+                neighborCounts[static_cast<size_t>(a)]++;
+            }
+            if (countB < maxNeighbors) {
+                neighbors[static_cast<size_t>(b) * maxNeighbors + countB] = { a, edge.restLength };
+                neighborCounts[static_cast<size_t>(b)]++;
+            }
+        }
+
+        lightning::SolverParams params;
+        params.stiffness = c.stiffness;
+        params.dampingFactor = c.dampingFactor;
+        params.airResistanceFactor = c.airResistanceFactor;
+        params.gravity = c.gravity;
+        params.steps = steps;
+        params.dt = dt;
+        params.maxNeighborsPerParticle = maxNeighbors;
+        params.forceConvergenceThreshold = 0.001f;
+
+        springStiffness = c.stiffness;
+        dampingFactor = c.dampingFactor;
+        airResistanceFactor = c.airResistanceFactor;
+        gravity = c.gravity;
+
+        return lightning::RunLightningCuda(particles, neighbors, neighborCounts, params, stepsRun);
+    }
+
+    void Mesh::ReplaceWithGraph(std::vector<Particle> newParticles, const std::vector<std::pair<int, int>>& bars, float stiffness) {
+        particles = std::move(newParticles);
+        springs.clear();
+        springs.reserve(bars.size());
+        springStiffness = stiffness;
+
+        for (const auto& bar : bars) {
+            const int a = bar.first;
+            const int b = bar.second;
+            if (a < 0 || b < 0 ||
+                a >= static_cast<int>(particles.size()) ||
+                b >= static_cast<int>(particles.size()) ||
+                a == b) {
+                continue;
+            }
+            springs.emplace_back(&particles[static_cast<size_t>(a)], &particles[static_cast<size_t>(b)], springStiffness);
+        }
     }
 
     bool Mesh::Update(float dt) {
